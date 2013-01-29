@@ -3,33 +3,32 @@
 #------------------------------------------------------------------------------
 
 # Set the HDF4 environment variables
-HDFINC=/home/gschmidt/hdf-4.2.5/include
-HDFLIB=/home/gschmidt/hdf-4.2.5/lib
+#HDFINC=/home/gschmidt/hdf-4.2.5/include
+#HDFLIB=/home/gschmidt/hdf-4.2.5/lib
 
 # Set the HDF_EOS environment variables
-HDFEOS_INC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/include
-HDFEOS_LIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
+#HDFEOS_INC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/include
+#HDFEOS_LIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
 
 # Set the GCTP environment variables (as delivered with HDF-EOS)
-GCTPINC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/gctp/include
-GCTPLIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
+#GCTPINC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/gctp/include
+#GCTPLIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
 
 # Set the SZIP environment variables
-SZIPINC=/home/gschmidt/szip-2.1/include
-SZIPLIB=/home/gschmidt/szip-2.1/lib
+#SZIPINC=/home/gschmidt/szip-2.1/include
+#SZIPLIB=/home/gschmidt/szip-2.1/lib
 
 # Set the ZLIB environment variables
-ZLIBINC=/home/gschmidt/zlib-1.2.7/include
-ZLIBLIB=/home/gschmidt/zlib-1.2.7/lib
+#ZLIBINC=/home/gschmidt/zlib-1.2.7/include
+#ZLIBLIB=/home/gschmidt/zlib-1.2.7/lib
 
 # Set the JPEG environment variables
-JPEGINC=/home/gschmidt/jpeg-6b/include
-JPEGLIB=/home/gschmidt/jpeg-6b/lib
+#JPEGINC=/home/gschmidt/jpeg-6b/include
+#JPEGLIB=/home/gschmidt/jpeg-6b/lib
 
 # Set up compile options
 CC = gcc
 RM = rm -f
-MV = mv
 EXTRA = -g -O -Wall
 
 # Define the include files
@@ -66,7 +65,7 @@ scene_based_sca: $(OBJ) $(INC)
 	$(CC) -o $(EXE) $(OBJ) $(LIB) $(EOSLIB)
 
 install:
-#	$(MV) $(EXE) $(BINDIR)/
+	cp $(EXE) $(BIN)
 
 clean:
 	$(RM) *.o
@@ -74,5 +73,5 @@ clean:
 $(OBJ): $(INC)
 
 .c.o:
-	$(CC) $(NCFLAGS) $(INCDIR) -c $<
+	$(CC) $(NCFLAGS) -c $<
 

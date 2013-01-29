@@ -556,9 +556,9 @@ void usage ()
             "is false)\n");
     printf ("\nscene_based_snow_cover --help will print the usage statement\n");
     printf ("\nExample: snow_cover "
-            "--toa={garbage} "
-            "--btemp={garbage} "
-            "--dem={garbage} "
-            "--snow_cover={garbage} "
+            "--toa=lndcal.LT50400331995173AAA02.hdf "
+            "--btemp=lndth.LT50400331995173AAA02.hdf "
+            "--dem=lsrd_scene_based_dem.bin "
+            "--snow_cover=snow_cover.hdf "
             "--verbose\n");
 }
