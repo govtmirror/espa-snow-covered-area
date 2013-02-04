@@ -25,6 +25,12 @@ Date        Programmer       Reason
 NOTES:
   1. The scene-based snow cover mask is based on an algorithm developed by
      Dave Selkowitz, Research Geographer, USGS Alaska Science Center.
+  2. Processing will occur on a subset of lines at a time, however, the snow
+     related buffers for snow cover and probability will need to be full-scene
+     buffers to handle the 7x7 window post-processing.  The other option is
+     to write out the NPROC_LINES buffer to a file, then read that file back
+     for post-processing.  The later seems inefficient, and the former should
+     be doable since the masks are 8-bit unsigned integers.
 ******************************************************************************/
 int main (int argc, char *argv[])
 {
@@ -53,6 +59,9 @@ int main (int argc, char *argv[])
                                 to include padding for the 3x3 */
     int offset;              /* offset in the raw binary DEM file to seek to
                                 to begin reading the window in the DEM */
+    int curr_snow_pix;       /* starting location/pixel of the current line
+                                in the snow-cover related arrays, which are
+                                full scene buffers */
     uint8 *refl_qa_mask=NULL;/* quality mask for the TOA reflectance products,
                                 where fill and saturated values are flagged */
     uint8 *btemp_qa_mask=NULL;/* quality mask for the brightness temp products,
@@ -109,7 +118,7 @@ int main (int argc, char *argv[])
     toa_input = open_input (toa_infile, btemp_infile);
     if (toa_input == (Input_t *)NULL)
     {
-        sprintf (errmsg, "Error opening/reading the TOA reflectance file: %s"
+        sprintf (errmsg, "Error opening/reading the TOA reflectance file: %s "
             "and the brightness temperature file: %s", toa_infile,
             btemp_infile);
         error_handler (true, FUNC_NAME, errmsg);
@@ -176,25 +185,28 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Allocate memory for the snow cover mask */
-    snow_mask = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the snow cover mask (full scene to handle
+       post-processing) */
+    snow_mask = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (snow_mask == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the snow mask");
+        sprintf (errmsg, "Error allocating memory (full scene) for the snow "
+            "mask");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
         exit (ERROR);
     }
 
-    /* Allocate memory for the snow cover probability */
-    snow_prob = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the snow cover probability (full scene to handle
+       post-processing) */
+    snow_prob = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (snow_prob == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the snow cover "
-            "probability");
+        sprintf (errmsg, "Error allocating memory (full scene) for the snow "
+            "cover probability");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
@@ -275,6 +287,10 @@ int main (int argc, char *argv[])
             toa_input->refl_scale_fact, toa_input->btemp_scale_fact,
             refl_qa_mask, btemp_qa_mask, cloud_mask);
 
+        /* Find the location of the current line in the snow cover and snow
+           probability masks, since they are full scene array buffers */
+        curr_snow_pix = line * toa_input->nsamps;
+
         /* Compute the snow cover mask */
         snow_cover_class (toa_input->refl_buf[0] /*b1*/,
             toa_input->refl_buf[1] /*b2*/, toa_input->refl_buf[2] /*b3*/,
@@ -282,17 +298,13 @@ int main (int argc, char *argv[])
             toa_input->btemp_buf /*b6*/, toa_input->refl_buf[5] /*b7*/,
             nlines_proc, toa_input->nsamps, toa_input->refl_scale_fact,
             toa_input->btemp_scale_fact, toa_input->refl_saturate_val,
-            refl_qa_mask, snow_mask, snow_prob);
+            refl_qa_mask, &snow_mask[curr_snow_pix], &snow_prob[curr_snow_pix]);
 
-        /* Temporary - write the masks to raw binary output */
+        /* Temporary - write the non snow-related masks to raw binary output */
         fwrite (refl_qa_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
             refl_qa_fptr);
         fwrite (btemp_qa_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
             btemp_qa_fptr);
-        fwrite (snow_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            scm_fptr);
-        fwrite (snow_prob, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            sc_prob_fptr);
         fwrite (cloud_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
             cm_fptr);
     }  /* end for line */
@@ -300,6 +312,19 @@ int main (int argc, char *argv[])
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Cloud and snow cover -- %% complete: 100%%\n");
+
+    /* Full scene post-processing of the snow cover pixels to deal with
+       false positives in the 90% confidence branch */
+    if (verbose)
+        printf ("  Post-processing snow cover mask.\n");
+    post_process_snow_cover_class (toa_input->nlines, toa_input->nsamps,
+        snow_mask, snow_prob);
+
+    /* Temporary - write the snow-related masks to raw binary output */
+    fwrite (snow_mask, 1, toa_input->nlines * toa_input->nsamps * sizeof(uint8),
+        scm_fptr);
+    fwrite (snow_prob, 1, toa_input->nlines * toa_input->nsamps * sizeof(uint8),
+        sc_prob_fptr);
 
     /* Temporary -- close the mask output files */
     fclose (scm_fptr);

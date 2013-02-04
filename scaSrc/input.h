@@ -32,7 +32,7 @@
 
 /* How many lines of TOA reflectance and brightness temperature data should be
    processed at one time */
-#define PROC_NLINES 10
+#define PROC_NLINES 100
 
 /* How many lines of DEM data should be processed at one time, multiple of 3
    since the shade relief input needs to be a factor of 3. */

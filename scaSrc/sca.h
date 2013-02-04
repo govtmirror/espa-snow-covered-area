@@ -79,6 +79,16 @@ void snow_cover_class
                                this is stored as a percentage between 0-100% */
 );
 
+void post_process_snow_cover_class
+(
+    int nlines,              /* I: number of lines in the data arrays */
+    int nsamps,              /* I: number of samples in the data arrays */
+    uint8 *snow_mask,        /* I/O: array of snow cover masked values
+                                (non-zero values represent snow) */
+    uint8 *probability_score /* I/O: probability pixel was classified correctly;
+                                stored as a percentage between 0-100% */
+);
+
 float hillshade
 (
     int16 *elev_window,   /* I: 3x3 array of elevation values in meters */

@@ -282,7 +282,130 @@ void snow_cover_class
             prob_score = 2;
         }
 
+        /* Assign the snow cover and probability scores to the current pixel */
         snow_mask[pix] = sc_mask;
         probability_score[pix] = prob_score;
     }  /* end for pix */
+}
+
+
+/******************************************************************************
+MODULE:  post_process_snow_cover_class
+
+PURPOSE:  Performs snow cover classification post-processing to clear out
+    false positives from the snow cover algorithm, particularly with the 90%
+    confidence portion of the tree.
+
+RETURN VALUE:
+Type = None
+
+PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
+at the USGS EROS
+
+HISTORY:
+Date        Programmer       Reason
+--------    ---------------  -------------------------------------
+2/4/2013    Gail Schmidt     Original Development
+
+NOTES:
+  1. Algorithm is based on the snow cover classification algorithm provided by
+     Dave Selkowitz, Research Geographer, USGS Alaska Science Center.
+  2. If a pixel is identified as snow covered and the snow cover probability is
+     90%, check the other pixels in a 7x7 window to see if any of those pixels
+     have been identified as snow covered but with a different snow cover
+     probability (meaning that they were identified at a different branch in
+     the tree). If yes, retain the snow cover value, and if no, change it to
+     designate a snow free pixel.
+  3. Input and output arrays are 1D arrays of size nlines * nsamps.
+******************************************************************************/
+void post_process_snow_cover_class
+(
+    int nlines,              /* I: number of lines in the data arrays */
+    int nsamps,              /* I: number of samples in the data arrays */
+    uint8 *snow_mask,        /* I/O: array of snow cover masked values
+                                (non-zero values represent snow) */
+    uint8 *probability_score /* I: probability pixel was classified correctly;
+                                stored as a percentage between 0-100% */
+)
+{
+    int line, samp;   /* current line and sample being processed */
+    int pix;          /* current pixel being processed */
+    int start_window_line;  /* starting line for the 7x7 window */
+    int end_window_line;    /* ending line for the 7x7 window */
+    int start_window_samp;  /* starting sample for the 7x7 window */
+    int end_window_samp;    /* ending sample for the 7x7 window */
+    int win_line, win_samp; /* current line and sample being processed in the
+                               7x7 window */
+    int win_pix;            /* current window pixel being processed */
+    bool change_snow_cover; /* should the snow cover value be changed for the
+                               current snow cover pixel? */
+
+    /* Loop through the pixels in the array to determine the snow cover
+       classification */
+    for (line = 0; line < nlines; line++)
+    {
+        /* Find the valid 7x7 window for the current line */
+        start_window_line = line - 3;
+        end_window_line = line + 3;
+        if (start_window_line < 0)
+            start_window_line = 0;
+        if (end_window_line >= nlines)
+            end_window_line = nlines - 1;
+
+        for (samp = 0; samp < nsamps; samp++)
+        {
+            /* Calculate the location of the current pixel in the 1D array */
+            pix = line * nlines + samp;
+
+            /* If the current pixel is snow covered and the probability is 90%
+               then look at the pixels in the surrounding 7x7 window.  If any
+               of those pixels are snow cover and have a probability other than
+               90%, then leave the pixel as snow covered.  Otherwise change
+               the mask to not snow covered. */
+            if (snow_mask[pix] == SNOW_COVER && probability_score[pix] == 90)
+            {
+                /* Initialize the snow cover change value.  If we find a
+                   reasone to leave the snow cover as-is, then we'll set to
+                   false. */
+                change_snow_cover = true;
+
+                /* Find the valid 7x7 window for the current line */
+                start_window_samp = samp - 3;
+                end_window_samp = samp + 3;
+                if (start_window_samp < 0)
+                    start_window_samp = 0;
+                if (end_window_samp >= nsamps)
+                    end_window_samp = nsamps - 1;
+
+                /* Loop through the 7x7 window (or whatever smaller window is
+                   available) */
+                for (win_line = start_window_line; win_line <= end_window_line;
+                     win_line++)
+                {
+                    /* Calculate the starting location of the current window
+                       pixel in the 1D array */
+                    win_pix = win_line * nlines + start_window_samp;
+
+                    for (win_samp = start_window_samp;
+                         win_samp <= end_window_samp; win_samp++, win_pix++)
+                    {
+                        /* If the current window pixel is snow cover but not
+                           from the 90% confidence branch, then keep the
+                           original pixel as snow cover */
+                        if (snow_mask[win_pix] == SNOW_COVER &&
+                            probability_score[win_pix] != 90)
+                        {
+                            change_snow_cover = false;
+                            break;
+                        }
+                    }  /* end for window samp */
+                }  /* end for window line */
+
+                /* If the snow cover for this pixel needs to be changed then
+                   reset it to no snow cover */
+                if (change_snow_cover)
+                    snow_mask[pix] = NO_SNOW;
+            }  /* end if snow cover and 90% confidence */
+        }  /* end for samp */
+    }  /* end for line */
 }

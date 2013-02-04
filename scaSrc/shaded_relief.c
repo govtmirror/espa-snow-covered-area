@@ -20,6 +20,11 @@ Date        Programmer       Reason
 --------    ---------------  -------------------------------------
 12/31/2012  Gail Schmidt     Original Development (based on GDALHillshade
                              algorithm in GDALDEM v1.9.2)
+2/1/2013    Gail Schmidt     The north/south resolution needs to indicate
+                             that we decrease in meters as we go from the
+                             top to the bottom of the image.  Thus the ns_res
+                             needs to be negative or the slope is incorrect.
+2/1/2013    Gail Schmidt     Added z scaling for Horn's algorithm.
 
 NOTES:
   1. Algorithm is based on Lambert's cosine law using Horn's algorithm for
@@ -51,6 +56,12 @@ float hillshade
     float xx_plus_yy;     /* value of x * x + y * y */
     float aspect;         /* aspect at this point in radians */
     float relief;         /* shaded relief value at this point */
+    float z_scale = 0.125; /* constant from GDAL for Horn algorithm (1/8) */
+
+    /* Since the data goes from west to east, leave the ew_res as positive.
+       However since the data goes from north to south, we need to negate the
+       ns_res. */
+    ns_res = -ns_res;
 
     /* Compute the slope */
     x_slope = ((elev_window[0] + 2.0 * elev_window[3] + elev_window[6]) -
@@ -58,15 +69,16 @@ float hillshade
                ew_res;
     y_slope = ((elev_window[6] + 2.0 * elev_window[7] + elev_window[8]) -
                (elev_window[0] + 2.0 * elev_window[1] + elev_window[2])) /
-               ew_res;
+               ns_res;
     xx_plus_yy = x_slope * x_slope + y_slope * y_slope;
 
     /* Compute the aspect */
     aspect = atan2 (y_slope, x_slope);
 
     /* Compute the shade value */
-    relief = (sin (sun_elev) - cos (sun_elev) * sqrt (xx_plus_yy) *
-        sin (aspect - solar_azimuth)) / sqrt (1.0 + xx_plus_yy);
+    relief = (sin (sun_elev) - cos (sun_elev) * z_scale * sqrt (xx_plus_yy) *
+        sin (aspect - solar_azimuth)) / sqrt (1.0 + z_scale * z_scale *
+        xx_plus_yy);
 
     return relief;
 }
@@ -130,7 +142,7 @@ void deep_shadow
     float sun_elev,      /* I: sun elevation angle in radians */
     float solar_azimuth, /* I: solar azimuth angle in radians */
     uint8 *shaded_relief,    /* O: array of shaded relief values (multiplied
-                                   by 255 to take advantage of the 8-bit int)
+                                   by 100 to indicate percent intensity)
                                    of size nlines * nsamps */
     uint8 *deep_shadow_mask  /* O: array of deep shadow masked values (non-zero
                                    values represent terrain-derived deep
@@ -195,12 +207,11 @@ void deep_shadow
             if (shade <= TERRAIN_DEEP_SHADOW_THRESH)
                 deep_shadow_mask[out_pix] = DEEP_SHADOW;
 
-            /* Scale the shaded relief values from 0.0 to 1.0 to 1-255, with
-               0 representing DEM fill pixels */
+            /* Scale the shaded relief values from 0.0 to 1.0 to 0 to 100 */
             if (shade <= 0.0)
-                shaded_relief[out_pix] = 1;
+                shaded_relief[out_pix] = 0;
             else
-                shaded_relief[out_pix] = 1 + (int) (254.0 * shade + 0.5);
+                shaded_relief[out_pix] = (int) (100.0 * shade + 0.5);
         }
     }
 }
