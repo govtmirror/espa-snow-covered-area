@@ -330,23 +330,24 @@ void post_process_snow_cover_class
 {
     int line, samp;   /* current line and sample being processed */
     int pix;          /* current pixel being processed */
-    int start_window_line;  /* starting line for the 7x7 window */
-    int end_window_line;    /* ending line for the 7x7 window */
-    int start_window_samp;  /* starting sample for the 7x7 window */
-    int end_window_samp;    /* ending sample for the 7x7 window */
+    int start_window_line;  /* starting line for the NxN window */
+    int end_window_line;    /* ending line for the NxN window */
+    int start_window_samp;  /* starting sample for the NxN window */
+    int end_window_samp;    /* ending sample for the NxN window */
     int win_line, win_samp; /* current line and sample being processed in the
-                               7x7 window */
+                               NxN window */
     int win_pix;            /* current window pixel being processed */
     bool change_snow_cover; /* should the snow cover value be changed for the
                                current snow cover pixel? */
+    int HALF_WINDOW = 3;    /* half of the 7x7 window around the current pix */
 
     /* Loop through the pixels in the array to determine the snow cover
        classification */
     for (line = 0; line < nlines; line++)
     {
-        /* Find the valid 7x7 window for the current line */
-        start_window_line = line - 3;
-        end_window_line = line + 3;
+        /* Find the valid NxN window for the current line */
+        start_window_line = line - HALF_WINDOW;
+        end_window_line = line + HALF_WINDOW;
         if (start_window_line < 0)
             start_window_line = 0;
         if (end_window_line >= nlines)
@@ -355,36 +356,37 @@ void post_process_snow_cover_class
         for (samp = 0; samp < nsamps; samp++)
         {
             /* Calculate the location of the current pixel in the 1D array */
-            pix = line * nlines + samp;
+            pix = line * nsamps + samp;
 
             /* If the current pixel is snow covered and the probability is 90%
-               then look at the pixels in the surrounding 7x7 window.  If any
+               then look at the pixels in the surrounding NxN window.  If any
                of those pixels are snow cover and have a probability other than
                90%, then leave the pixel as snow covered.  Otherwise change
                the mask to not snow covered. */
             if (snow_mask[pix] == SNOW_COVER && probability_score[pix] == 90)
             {
+//printf ("DEBUG: Found a snow cover pixel of 90%% confidence at line, sample %d, %d\n", line, samp);
                 /* Initialize the snow cover change value.  If we find a
                    reasone to leave the snow cover as-is, then we'll set to
                    false. */
                 change_snow_cover = true;
 
-                /* Find the valid 7x7 window for the current line */
-                start_window_samp = samp - 3;
-                end_window_samp = samp + 3;
+                /* Find the valid NxN window for the current line */
+                start_window_samp = samp - HALF_WINDOW;
+                end_window_samp = samp + HALF_WINDOW;
                 if (start_window_samp < 0)
                     start_window_samp = 0;
                 if (end_window_samp >= nsamps)
                     end_window_samp = nsamps - 1;
 
-                /* Loop through the 7x7 window (or whatever smaller window is
+                /* Loop through the NxN window (or whatever smaller window is
                    available) */
                 for (win_line = start_window_line; win_line <= end_window_line;
                      win_line++)
                 {
                     /* Calculate the starting location of the current window
                        pixel in the 1D array */
-                    win_pix = win_line * nlines + start_window_samp;
+                    win_pix = win_line * nsamps + start_window_samp;
 
                     for (win_samp = start_window_samp;
                          win_samp <= end_window_samp; win_samp++, win_pix++)
@@ -405,6 +407,7 @@ void post_process_snow_cover_class
                    reset it to no snow cover */
                 if (change_snow_cover)
                     snow_mask[pix] = NO_SNOW;
+//if (change_snow_cover) printf ("DEBUG:   Changing mask to no snow cover\n");
             }  /* end if snow cover and 90% confidence */
         }  /* end for samp */
     }  /* end for line */
