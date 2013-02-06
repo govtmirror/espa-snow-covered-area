@@ -36,8 +36,9 @@ def logIt (msg, log_handler):
 # file should be the LPGS MTL.txt file.
 #
 # History:
-#   Updated on ???? by Gail Schmidt, USGS/EROS
-#   {Explain change}
+#   Updated on 2/6/2013 by Gail Schmidt, USGS/EROS
+#   Changed the script to update the map projection information in the GDAL
+#     header file to reflect the correct projection and not Geographic.
 #
 # Usage: create_dem.py --help prints the help message
 ############################################################################
@@ -47,6 +48,9 @@ class SceneDEM():
     east_bound_lon = -9999.0          # east bounding coordinate
     north_bound_lat = -9999.0         # north bounding coordinate
     south_bound_lat = 9999.0          # south bounding coordinate
+    ul_proj_x = -13.0                 # UL projection x coordinate
+    ul_proj_y = -13.0                 # UL projection y coordinate
+    pixsize = -13.0                   # pixel size
     path = 0                          # WRS path
     row = 0                           # WRS row
     map_proj = "None"                 # map projection (UTM or PS)
@@ -62,10 +66,62 @@ class SceneDEM():
     source_dem = "lsrd_source_dem.h5"            # source DEM HDF filename
     scene_dem = "lsrd_scene_based_dem.h5"        # scene based DEM HDF filename
     scene_dem_envi = "lsrd_scene_based_dem.bin"  # scene based DEM ENVI filename
+    scene_dem_hdr = "lsrd_scene_based_dem.hdr"   # scene based DEM header file
     geomgrid = "lsrd_geomgrid.h5"                # geometric grid HDF filename
 
     def __init__(self):
         pass
+
+    ########################################################################
+    # Description: fixGdalHdr will parse the GDAL generated header file for
+    # the scene based DEM and update the map projection information to be
+    # correct, based on the projection information in the MTL file.
+    #
+    # Inputs:
+    #   metafile - name of the metadata file to be parsed
+    #   log_handler - open log file for logging or None for stdout
+    #
+    # Returns: Nothing
+    #
+    # Notes:
+    #     It is expected the GDAL header exists and contains the map info
+    #         field along with all the other fields needed for the header.
+    #######################################################################
+    def fixGdalHdr (self, gdal_hdr):
+        # open the GDAL header file for reading
+        hdrf = open (gdal_hdr, 'r')
+
+        # open a temporary new file for writing (copying the current GDAL
+        # header information)
+        temp_hdr = 'temp.hdr'
+        tempf = open (temp_hdr, 'w')
+
+        # read and process one line at a time, looking for the line with
+        # "map info".  remove the trailing end of line and leading/trailing
+        # white space
+        for line in hdrf:
+            myline = line.rstrip('\r\n').strip()
+#            print "DEBUG: *%s*" % myline
+
+            # if the current line contains "map info" then we want to modify
+            # this line with the new projection info
+            if myline.find ('map info') >= 0:
+                map_info_str = "map info = {UTM, 1, 1, %f, %f, %f, %f, %d, North, WGS-84}\n" % (self.ul_proj_x, self.ul_proj_y, self.pixsize, self.pixsize, self.utm_zone)
+                tempf.write (map_info_str)
+            else:
+                # copy this line as-is to the temporary header file
+                tempf.write (line)
+
+        # done with the header file and temp file
+        hdrf.close()
+        tempf.close()
+
+        # remove the header file
+        os.remove (gdal_hdr)
+
+        # rename the temporary file to the header file
+        os.rename (temp_hdr, gdal_hdr)
+
 
     ########################################################################
     # Description: parseMeta will parse the input metadata file, search for
@@ -130,6 +186,12 @@ class SceneDEM():
             elif (param == 'CORNER_LR_LON_PRODUCT'):
                 if (float(value) > self.east_bound_lon):
                     self.east_bound_lon = float(value)
+            elif (param == 'CORNER_UL_PROJECTION_X_PRODUCT'):
+                self.ul_proj_x = float(value)
+            elif (param == 'CORNER_UL_PROJECTION_Y_PRODUCT'):
+                self.ul_proj_y = float(value)
+            elif (param == 'GRID_CELL_SIZE_REFLECTIVE'):
+                self.pixsize = float(value)
             elif (param == 'WRS_PATH'):
                 self.path = int(value)
             elif (param == 'WRS_ROW'):
@@ -156,6 +218,17 @@ class SceneDEM():
            (self.east_bound_lon == -9999.0) or \
            (self.west_bound_lon == 9999.0):
             msg = 'Error: obtaining north/south and/or east/west bounding metadata fields from: %s' % metafile
+            logIt (msg, log_handler)
+            return ERROR
+
+        if (self.ul_proj_x == -13.0) or \
+           (self.ul_proj_y == -13.0):
+            msg = 'Error: obtaining UL project x/y fields from: %s' % metafile
+            logIt (msg, log_handler)
+            return ERROR
+
+        if (self.pixsize == -13.0):
+            msg = 'Error: obtaining reflective grid cell size field from: %s' % metafile
             logIt (msg, log_handler)
             return ERROR
 
@@ -225,7 +298,8 @@ class SceneDEM():
             msg = '  UTM_ZONE = %d\n' % self.utm_zone
             omf_list.append (msg)
         elif (self.map_proj == "PS"):
-            # GAIL finish!!
+            # GAIL finish!!  Add support for the projection params, which are
+            # then read by makegeomgrid/get_proj_info_toa_refl.c
             omf_list.append ('  TARGET_PROJECTION = ???\n')
         msg = '  GRID_FILENAME_PASS_1 = \"%s\"\n\n' % metafile
         omf_list.append (msg)
@@ -461,6 +535,12 @@ END\n' % self.scene_dem
             os.chdir (mydir)
             return ERROR
         
+        # modify the gdal output header since it doesn't contain the correct
+        # projection information; instead it just flags the image as being
+        # in the Geographic projection
+        print 'DEBUG: Updating the GDAL header file'
+        self.fixGdalHdr (self.scene_dem_hdr)
+
         # successful completion.  return to the original directory.
         os.chdir (mydir)
         msg = 'Completion of scene based DEM generation.'
