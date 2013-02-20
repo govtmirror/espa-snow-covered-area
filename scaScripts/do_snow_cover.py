@@ -78,6 +78,11 @@ class Sca():
     #   2. If the metadata file is not specified and the information is going
     #      to be grabbed from the command line, then it's assumed all the
     #      parameters will be pulled from the command line.
+    #   3. Currently the raw binary products are automatically written in
+    #      addition to the HDF-EOS product for the snow cover algorithm.
+    #      The raw binary products will be used for downstream processing,
+    #      but only the output HDF-EOS product should be delivered to the
+    #      general public.
     #######################################################################
     def runSca (self, metafile=None, toa_infile=None, btemp_infile=None, \
         sca_outfile=None, logfile=None, usebin=None):
@@ -193,7 +198,7 @@ class Sca():
 
         # run snow cover algorithm, checking the return status of each module.
         # exit if any errors occur.
-        cmdstr = "%sscene_based_sca --toa=%s --btemp=%s --dem=%s --snow_cover=%s --verbose" % (bin_dir, toa_infile, btemp_infile, dem.scene_dem_envi, sca_outfile)
+        cmdstr = "%sscene_based_sca --toa=%s --btemp=%s --dem=%s --snow_cover=%s --write_binary --verbose" % (bin_dir, toa_infile, btemp_infile, dem.scene_dem_envi, sca_outfile)
 #        print 'DEBUG: scene_based_sca command: %s' % cmdstr
         (status, output) = commands.getstatusoutput (cmdstr)
         logIt (output, log_handler)
