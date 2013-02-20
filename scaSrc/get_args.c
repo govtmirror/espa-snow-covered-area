@@ -22,6 +22,7 @@ HISTORY:
 Date        Programmer       Reason
 --------    ---------------  -------------------------------------
 1/2/2013    Gail Schmidt     Original Development
+2/15/2013   Gail Schmidt     Added support for write raw binary flag
 
 NOTES:
   1. Memory is allocated for the input and output files.  All of these should
@@ -36,17 +37,20 @@ short get_args
     char **btemp_infile,  /* O: address of input TOA filename */
     char **dem_infile,    /* O: address of input DEM filename */
     char **sc_outfile,    /* O: address of output snow cover filename */
+    bool *write_binary,   /* O: write raw binary flag */
     bool *verbose         /* O: verbose flag */
 )
 {
     int c;                           /* current argument index */
     int option_index;                /* index for the command-line option */
     static int verbose_flag=0;       /* verbose flag */
+    static int binary_flag=0;        /* write binary flag */
     char errmsg[STR_SIZE];           /* error message */
     char FUNC_NAME[] = "get_args";   /* function name */
     static struct option long_options[] =
     {
         {"verbose", no_argument, &verbose_flag, 1},
+        {"write_binary", no_argument, &binary_flag, 1},
         {"toa", required_argument, 0, 't'},
         {"btemp", required_argument, 0, 'b'},
         {"dem", required_argument, 0, 'd'},
@@ -138,6 +142,10 @@ short get_args
         usage ();
         return (ERROR);
     }
+
+    /* Check the write binary flag */
+    if (binary_flag)
+        *write_binary = true;
 
     /* Check the verbose flag */
     if (verbose_flag)

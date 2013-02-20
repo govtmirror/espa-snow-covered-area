@@ -9,6 +9,8 @@
 #include "mystring.h"
 #include "error_handler.h"
 #include "input.h"
+#include "output.h"
+#include "space.h"
 
 /* Set up the fill, cloud, snow, and deep shadow mask values */
 #define NO_DATA 255
@@ -19,6 +21,7 @@
 #define NO_SNOW 0
 #define DEEP_SHADOW 255
 #define NO_DEEP_SHADOW 0
+#define ADJ_PIX_MASKED 255
 
 /* Define the terrain-derived deep shadow threshold */
 #define TERRAIN_DEEP_SHADOW_THRESH 0.03
@@ -34,6 +37,7 @@ short get_args
     char **btemp_infile,  /* O: address of input TOA filename */
     char **dem_infile,    /* O: address of input DEM filename */
     char **sc_outfile,    /* O: address of output snow cover filename */
+    bool *write_binary,   /* O: write raw binary flag */
     bool *verbose         /* O: verbose flag */
 );
 
@@ -68,25 +72,45 @@ void snow_cover_class
     int nlines,    /* I: number of lines in the data arrays */
     int nsamps,    /* I: number of samples in the data arrays */
     float refl_scale_fact,  /* I: scale factor for the TOA reflectance values */
-    float btemp_scale_fact, /* I: scale factor for the broghtness temp values */
+    float btemp_scale_fact, /* I: scale factor for the brightness temp values */
     int refl_sat_value,     /* I: saturation value for TOA reflectance values */
     uint8 *refl_qa_mask, /* I: array of masked values for processing (non-zero
                                values are not to be processed) reflectance
                                bands */
     uint8 *snow_mask,    /* O: array of snow cover masked values (non-zero
                                values represent snow) */
-    uint8 *probability_score /* O: probability pixel was classified correctly;
-                               this is stored as a percentage between 0-100% */
+    uint8 *probability_score,/* O: probability pixel was classified correctly;
+                               this is stored as a percentage between 0-100%
+                               (used for debugging) */
+    uint8 *tree_node,    /* O: node in tree used to classify each pixel */
+    uint8 *ndsi_array,   /* O: NDSI outputs */
+    uint8 *ndvi_array    /* O: NDVI outputs (used for debugging) */
 );
 
 void post_process_snow_cover_class
 (
-    int nlines,              /* I: number of lines in the data arrays */
-    int nsamps,              /* I: number of samples in the data arrays */
-    uint8 *snow_mask,        /* I/O: array of snow cover masked values
-                                (non-zero values represent snow) */
-    uint8 *probability_score /* I/O: probability pixel was classified correctly;
-                                stored as a percentage between 0-100% */
+    int nlines,         /* I: number of lines in the data arrays */
+    int nsamps,         /* I: number of samples in the data arrays */
+    uint8 *snow_mask,   /* I/O: array of snow cover masked values (non-zero
+                                values represent snow) */
+    uint8 *tree_node    /* I: node in tree used to classify each pixel */
+);
+
+void count_adjacent_snow_cover
+(
+    int nlines,           /* I: number of lines in the data arrays */
+    int nsamps,           /* I: number of samples in the data arrays */
+    uint8 *snow_mask,     /* I: array of snow cover masked values */
+    uint8 *cloud_mask,    /* I: array of cloud masked values */
+    uint8 *shadow_mask,   /* I: array of deep shadow masked values */
+    uint8 *refl_qa_mask,  /* I: quality mask for the TOA reflectance products,
+                                where fill and saturated values are flagged */
+    uint8 *btemp_qa_mask, /* I: quality mask for the brightness temp products,
+                                where fill and saturated values are flagged */
+    uint8 *snow_count     /* O: count of the snow cover results in the adjacent
+                                3x3 window, or high value if one or more of
+                                the adjacent pixels are cloud/shadow/fill */
+
 );
 
 float hillshade
@@ -133,6 +157,7 @@ void deep_shadow
                                    values represent terrain-derived deep
                                    shadow areas) of size nlines * nsamps */
 );
+
 void refl_mask
 (
     int16 *b1,     /* I: array of unscaled band 1 TOA reflectance values */
@@ -158,6 +183,14 @@ void btemp_mask
     uint8 *btemp_qa_mask  /* O: array of masked values for processing (non-zero
                                 values are not to be processed) brightness
                                 temp bands */
+);
+
+int write_envi_hdr
+(
+    char *hdr_file,     /* I: name of header file to be generated */
+    Input_t *toa_input, /* I: input structure for both the TOA reflectance
+                              and brightness temperature products */
+    Space_def_t *space_def /* I: spatial definition information */
 );
 
 #endif

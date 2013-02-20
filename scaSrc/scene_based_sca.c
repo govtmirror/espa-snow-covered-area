@@ -1,5 +1,10 @@
 #include "sca.h"
 
+/* Define the output SDS names to be written to the HDF-EOS file */
+/* #define NUM_OUT_SDS 5 -- defined in output.h */
+char *out_sds_names[NUM_OUT_SDS] = {"toa_refl_qa", "btemp_qa",
+    "snow_cover_mask", "cloud_mask", "deep_shadow_mask"};
+
 /******************************************************************************
 MODULE:  scene_based_sca
 
@@ -18,9 +23,14 @@ PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
 at the USGS EROS
 
 HISTORY:
-Date        Programmer       Reason
---------    ---------------  -------------------------------------
-12/31/2012  Gail Schmidt     Original Development
+Date          Programmer       Reason
+----------    ---------------  -------------------------------------
+12/31/2012    Gail Schmidt     Original Development
+2/11/2012     Gail Schmidt     Updated to write an ENVI header when processing
+                               raw binary outputs
+2/13/2012     Gail Schmidt     Added support for counting the number of adjacent
+                               snow-covered pixels
+2/15/2013     Gail Schmidt     Added support for HDF-EOS output files
 
 NOTES:
   1. The scene-based snow cover mask is based on an algorithm developed by
@@ -35,16 +45,23 @@ NOTES:
 int main (int argc, char *argv[])
 {
     bool verbose;            /* verbose flag for printing messages */
+    bool write_binary;       /* should we write raw binary output? */
     bool dem_top;            /* are we at the top of the dem for shaded
                                 relief processing */
     bool dem_bottom;         /* are we at the bottom of the dem for shaded
                                 relief processing */
     char FUNC_NAME[] = "main"; /* function name */
     char errmsg[STR_SIZE];   /* error message */
+    char *hdf_grid_name = "Grid";  /* name of the grid for HDF-EOS */
     char *toa_infile=NULL;   /* input TOA filename */
     char *btemp_infile=NULL; /* input brightness temperature filename */
     char *dem_infile=NULL;   /* input DEM filename */
     char *sc_outfile=NULL;   /* output snow cover filename */
+    char *QA_on[NUM_OUT_SDS] = {"fill", "fill", "snow", "cloud",
+                                "deep shadow"};
+    char *QA_off[NUM_OUT_SDS] = {"not fill", "not fill", "clear", "clear",
+                                 "clear"};
+
     int retval;              /* return status */
     int k;                   /* variable to keep track of the % complete */
     int band;                /* current band to be processed */
@@ -62,54 +79,75 @@ int main (int argc, char *argv[])
     int curr_snow_pix;       /* starting location/pixel of the current line
                                 in the snow-cover related arrays, which are
                                 full scene buffers */
+    int out_sds_types[NUM_OUT_SDS];  /* array of image SDS types */
     uint8 *refl_qa_mask=NULL;/* quality mask for the TOA reflectance products,
                                 where fill and saturated values are flagged */
     uint8 *btemp_qa_mask=NULL;/* quality mask for the brightness temp products,
                                 where fill and saturated values are flagged */
     uint8 *cloud_mask=NULL;  /* cloud mask */
     uint8 *snow_mask=NULL;   /* snow cover mask */
+    uint8 *snow_count=NULL;  /* snow count for adjacent pixels */
     uint8 *snow_prob=NULL;   /* snow cover probability score (percentage) */
+    uint8 *tree_node=NULL;   /* tree node used to identify the snow cover */
+    uint8 *ndsi=NULL;        /* NDSI values */
+    uint8 *ndvi=NULL;        /* NDVI values */
     uint8 *deep_shad_mask=NULL; /* deep shadow mask */
     uint8 *shaded_relief=NULL;  /* shaded relief values */
     int16 *dem=NULL;         /* input DEM data (meters) */
     Input_t *toa_input=NULL; /* input structure for both the TOA reflectance
                                 and brightness temperature products */
+    Space_def_t space_def;   /* spatial definition information */
+    Output_t *output = NULL; /* output structure and metadata */
+
     FILE *dem_fptr=NULL;     /* input scene-based DEM file pointer */
     FILE *scm_fptr=NULL;     /* snow cover mask file pointer */
     FILE *sc_prob_fptr=NULL; /* snow cover probability file pointer */
+    FILE *node_fptr=NULL;    /* tree node file pointer */
+    FILE *adj_count_fptr=NULL; /* adjacent snow cover counter file pointer */
     FILE *cm_fptr=NULL;      /* cloud mask file pointer */
     FILE *dsm_fptr=NULL;     /* deep shadow mask file pointer */
     FILE *relief_fptr=NULL;  /* shade relief file pointer */
-    FILE *refl_qa_fptr=NULL; /* TOA reflectance QA */
-    FILE *btemp_qa_fptr=NULL;/* brightness temp QA */
+    FILE *refl_qa_fptr=NULL; /* TOA reflectance QA file pointer */
+    FILE *btemp_qa_fptr=NULL;/* brightness temp QA file pointer */
+    FILE *ndsi_fptr=NULL;    /* NDSI file pointer */
+    FILE *ndvi_fptr=NULL;    /* NDVI file pointer */
 
     printf ("Starting scene-based snow cover processing ...\n");
-
-    /* Temporary -- open the mask output files for raw binary output */
-    scm_fptr = fopen ("snow_cover_mask.bin", "wb");
-    sc_prob_fptr = fopen ("snow_cover_probability_score.bin", "wb");
-    cm_fptr = fopen ("cloud_mask.bin", "wb");
-    dsm_fptr = fopen ("deep_shadow_mask.bin", "wb");
-    relief_fptr = fopen ("shade_relief.bin", "wb");
-    refl_qa_fptr = fopen ("toa_refl_qa.bin", "wb");
-    btemp_qa_fptr = fopen ("btemp_qa.bin", "wb");
 
     /* Read the command-line arguments, including the name of the input
        Landsat TOA reflectance product and the DEM */
     retval = get_args (argc, argv, &toa_infile, &btemp_infile, &dem_infile,
-        &sc_outfile, &verbose);
+        &sc_outfile, &write_binary, &verbose);
     if (retval != SUCCESS)
     {   /* get_args already printed the error message */
         exit (ERROR);
     }
 
-    /* Provide user information is verbose is turned on */
+    /* Provide user information if verbose is turned on */
     if (verbose)
     {
         printf ("  TOA reflectance input file: %s\n", toa_infile);
         printf ("  Brightness temp input file: %s\n", btemp_infile);
         printf ("  DEM input file: %s\n", dem_infile);
         printf ("  Snow cover output file: %s\n", sc_outfile);
+        if (write_binary)
+            printf ("    -- Also writing raw binary output.\n");
+    }
+
+    /* Temporary -- open the mask output files for raw binary output */
+    if (write_binary)
+    {
+        scm_fptr = fopen ("snow_cover_mask.bin", "wb");
+        sc_prob_fptr = fopen ("snow_cover_probability_score.bin", "wb");
+        node_fptr = fopen ("snow_cover_node.bin", "wb");
+        adj_count_fptr = fopen ("adjacent_snow_count.bin", "wb");
+        cm_fptr = fopen ("cloud_mask.bin", "wb");
+        dsm_fptr = fopen ("deep_shadow_mask.bin", "wb");
+        relief_fptr = fopen ("shade_relief.bin", "wb");
+        refl_qa_fptr = fopen ("toa_refl_qa.bin", "wb");
+        btemp_qa_fptr = fopen ("btemp_qa.bin", "wb");
+        ndsi_fptr = fopen ("ndsi.bin", "wb");
+        ndvi_fptr = fopen ("ndvi.bin", "wb");
     }
 
     /* Open the TOA reflectance and brightness temperature products, set up
@@ -147,38 +185,42 @@ int main (int argc, char *argv[])
             toa_input->refl_saturate_val, toa_input->btemp_saturate_val);
     }
 
-    /* Allocate memory for the TOA reflectance QA mask */
-    refl_qa_mask = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the TOA reflectance QA mask (full scene to handle
+       post-processing) */
+    refl_qa_mask = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (refl_qa_mask == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the TOA reflectance "
-            "QA mask");
+        sprintf (errmsg, "Error allocating memory (full scene) for the TOA "
+            "reflectance QA mask");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
         exit (ERROR);
     }
 
-    /* Allocate memory for the brightness temperature QA mask */
-    btemp_qa_mask = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the brightness temperature QA mask (full scene to
+       handle post-processing) */
+    btemp_qa_mask = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (btemp_qa_mask == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the brightness temp "
-            "QA mask");
+        sprintf (errmsg, "Error allocating memory (full scene) for the "
+            "brightness temp QA mask");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
         exit (ERROR);
     }
 
-    /* Allocate memory for the cloud mask */
-    cloud_mask = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the cloud mask (full scene to handle
+       post-processing) */
+    cloud_mask = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (cloud_mask == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the cloud mask");
+        sprintf (errmsg, "Error allocating memory (full scene) for the cloud "
+            "mask");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
@@ -199,14 +241,81 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Allocate memory for the snow cover probability (full scene to handle
-       post-processing) */
-    snow_prob = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
+    /* Allocate memory for the snow cover probability */
+    snow_prob = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
         sizeof (uint8));
     if (snow_prob == NULL)
     {
-        sprintf (errmsg, "Error allocating memory (full scene) for the snow "
-            "cover probability");
+        sprintf (errmsg, "Error allocating memory for the snow cover "
+            "probability");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Allocate memory for the tree node (full scene to handle
+       post-processing) */
+    tree_node = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
+        sizeof (uint8));
+    if (tree_node == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory (full scene) for the tree "
+            "node");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Allocate memory for the NDVI */
+    ndvi = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps, sizeof (uint8));
+    if (ndvi == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory for the NDVI");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Allocate memory for the NDSI */
+    ndsi = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps, sizeof (uint8));
+    if (ndsi == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory for the NDSI");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Get the projection and spatial information from the input TOA
+       reflectance product */
+    retval = get_space_def_hdf (&space_def, toa_infile, hdf_grid_name);
+    if (retval != SUCCESS)
+    {
+        sprintf (errmsg, "Error reading spatial metadata from the HDF file: "
+            "%s", toa_infile);
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Create and open the output HDF-EOS file */
+    if (create_output (sc_outfile) != SUCCESS)
+    {   /* error message already printed */
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    output = open_output (sc_outfile, NUM_OUT_SDS, out_sds_names,
+        toa_input->nlines, toa_input->nsamps);
+    if (output == NULL)
+    {   /* error message already printed */
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
@@ -269,27 +378,28 @@ int main (int argc, char *argv[])
             exit (ERROR);
         }
 
+        /* Find the location of the current line in the snow cover masks,
+           since they are full scene array buffers */
+        curr_snow_pix = line * toa_input->nsamps;
+
         /* Set up mask for the TOA reflectance values */
         refl_mask (toa_input->refl_buf[0] /*b1*/, toa_input->refl_buf[1] /*b2*/,
             toa_input->refl_buf[2] /*b3*/, toa_input->refl_buf[3] /*b4*/,
             toa_input->refl_buf[4] /*b5*/, toa_input->refl_buf[5] /*b7*/,
             nlines_proc, toa_input->nsamps, toa_input->refl_fill,
-            refl_qa_mask);
+            &refl_qa_mask[curr_snow_pix]);
 
         /* Set up mask for the brightness temperature values */
         btemp_mask (toa_input->btemp_buf, nlines_proc, toa_input->nsamps,
-            toa_input->btemp_fill, btemp_qa_mask);
+            toa_input->btemp_fill, &btemp_qa_mask[curr_snow_pix]);
 
         /* Compute the cloud mask */
         cloud_cover_class (toa_input->refl_buf[0] /*b1*/,
             toa_input->refl_buf[3] /*b4*/, toa_input->btemp_buf /*b6*/,
             toa_input->refl_buf[5] /*b7*/, nlines_proc, toa_input->nsamps,
             toa_input->refl_scale_fact, toa_input->btemp_scale_fact,
-            refl_qa_mask, btemp_qa_mask, cloud_mask);
-
-        /* Find the location of the current line in the snow cover and snow
-           probability masks, since they are full scene array buffers */
-        curr_snow_pix = line * toa_input->nsamps;
+            &refl_qa_mask[curr_snow_pix], &btemp_qa_mask[curr_snow_pix],
+            &cloud_mask[curr_snow_pix]);
 
         /* Compute the snow cover mask */
         snow_cover_class (toa_input->refl_buf[0] /*b1*/,
@@ -298,15 +408,19 @@ int main (int argc, char *argv[])
             toa_input->btemp_buf /*b6*/, toa_input->refl_buf[5] /*b7*/,
             nlines_proc, toa_input->nsamps, toa_input->refl_scale_fact,
             toa_input->btemp_scale_fact, toa_input->refl_saturate_val,
-            refl_qa_mask, &snow_mask[curr_snow_pix], &snow_prob[curr_snow_pix]);
+            &refl_qa_mask[curr_snow_pix], &snow_mask[curr_snow_pix], snow_prob,
+            &tree_node[curr_snow_pix], ndsi, ndvi);
 
         /* Temporary - write the non snow-related masks to raw binary output */
-        fwrite (refl_qa_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            refl_qa_fptr);
-        fwrite (btemp_qa_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            btemp_qa_fptr);
-        fwrite (cloud_mask, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            cm_fptr);
+        if (write_binary)
+        {
+            fwrite (snow_prob, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
+                sc_prob_fptr);
+            fwrite (ndvi, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
+                ndvi_fptr);
+            fwrite (ndsi, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
+                ndsi_fptr);
+        }
     }  /* end for line */
 
     /* Print the processing status if verbose */
@@ -314,48 +428,58 @@ int main (int argc, char *argv[])
         printf ("  Cloud and snow cover -- %% complete: 100%%\n");
 
     /* Full scene post-processing of the snow cover pixels to deal with
-       false positives in the 90% confidence branch */
+       false positives in the dense conifer forest areas */
     if (verbose)
         printf ("  Post-processing snow cover mask.\n");
     post_process_snow_cover_class (toa_input->nlines, toa_input->nsamps,
-        snow_mask, snow_prob);
+        snow_mask, tree_node);
 
     /* Temporary - write the snow-related masks to raw binary output */
-    fwrite (snow_mask, 1, toa_input->nlines * toa_input->nsamps * sizeof(uint8),
-        scm_fptr);
-    fwrite (snow_prob, 1, toa_input->nlines * toa_input->nsamps * sizeof(uint8),
-        sc_prob_fptr);
+    if (write_binary)
+    {
+        fwrite (snow_mask, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), scm_fptr);
+        fwrite (tree_node, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), node_fptr);
+        fwrite (refl_qa_mask, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), refl_qa_fptr);
+        fwrite (btemp_qa_mask, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), btemp_qa_fptr);
+        fwrite (cloud_mask, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), cm_fptr);
+    }
 
     /* Temporary -- close the mask output files */
-    fclose (scm_fptr);
-    fclose (sc_prob_fptr);
-    fclose (cm_fptr);
+    if (write_binary)
+    {
+        fclose (scm_fptr);
+        fclose (sc_prob_fptr);
+        fclose (node_fptr);
+        fclose (cm_fptr);
+        fclose (ndsi_fptr);
+        fclose (ndvi_fptr);
+    }
 
     /* Free the mask pointers */
-    if (refl_qa_mask != NULL)
-    {
-        free (refl_qa_mask);
-        refl_qa_mask = NULL;
-    }
-    if (btemp_qa_mask != NULL)
-    {
-        free (btemp_qa_mask);
-        btemp_qa_mask = NULL;
-    }
-    if (cloud_mask != NULL)
-    {
-        free (cloud_mask);
-        cloud_mask = NULL;
-    }
-    if (snow_mask != NULL)
-    {
-        free (snow_mask);
-        snow_mask = NULL;
-    }
     if (snow_prob != NULL)
     {
         free (snow_prob);
         snow_prob = NULL;
+    }
+    if (tree_node != NULL)
+    {
+        free (tree_node);
+        tree_node = NULL;
+    }
+    if (ndsi != NULL)
+    {
+        free (ndsi);
+        ndsi = NULL;
+    }
+    if (ndvi != NULL)
+    {
+        free (ndvi);
+        ndvi = NULL;
     }
 
     /* Open the DEM for reading raw binary */
@@ -383,12 +507,15 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Allocate memory for the shaded relief and deep shadow mask */
-    deep_shad_mask = (uint8 *) calloc (PROC_NLINES * toa_input->nsamps,
+    /* Allocate memory for the shaded relief and deep shadow mask.  Deep
+       shadow mask needs to be full scene since it will be used as part of
+       the post-processing. */
+    deep_shad_mask = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
         sizeof (uint8));
     if (deep_shad_mask == NULL)
     {
-        sprintf (errmsg, "Error allocating memory for the deep shadow mask");
+        sprintf (errmsg, "Error allocating memory (full scene) for the deep "
+            "shadow mask");
         error_handler (true, FUNC_NAME, errmsg);
         close_input (toa_input);
         free_input (toa_input);
@@ -434,6 +561,10 @@ int main (int argc, char *argv[])
             }
         }
 
+        /* Find the location of the current line in the deep shadow mask
+           since it is a full scene array buffer */
+        curr_snow_pix = line * toa_input->nsamps;
+
         /* Prepare to read the current lines from the DEM.  We need an extra
            line at the start and end for the shaded relief.  If we are just
            starting at line 0, then read an extra line from the end of the
@@ -477,12 +608,9 @@ int main (int argc, char *argv[])
             exit (ERROR);
         }
 
-        /* Initialize the shaded relief and deep shadow masks to 0s for the
-           current window.  The first and last pixel will not get processed
-           in the deep_shadow mask.  The first and last line in the entire
-           image also will not get processed in the deep_shadow mask. */
-        memset ((void *) deep_shad_mask, 0, PROC_NLINES * toa_input->nsamps
-            * sizeof (uint8));
+        /* Reset the shaded relief to 0s for the current window.  The first
+           and last pixel will not get processed.  The entire deep shadow mask
+           has already been initialized to 0s. */
         memset ((void *) shaded_relief, 0, PROC_NLINES * toa_input->nsamps
             * sizeof (uint8));
 
@@ -491,30 +619,174 @@ int main (int argc, char *argv[])
         deep_shadow (dem, dem_top, dem_bottom, nlines_proc, toa_input->nsamps,
             toa_input->meta.pixsize, toa_input->meta.pixsize,
             toa_input->meta.solar_elev, toa_input->meta.solar_az,
-            shaded_relief, deep_shad_mask);
+            shaded_relief, &deep_shad_mask[curr_snow_pix]);
 
         /* Temporary - write the shaded relief and deep shadow mask to raw
            binary output */
-        fwrite (deep_shad_mask, 1, nlines_proc*toa_input->nsamps *
-            sizeof(uint8), dsm_fptr);
-        fwrite (shaded_relief, 1, nlines_proc*toa_input->nsamps * sizeof(uint8),
-            relief_fptr);
+        if (write_binary)
+        {
+            fwrite (shaded_relief, 1, nlines_proc*toa_input->nsamps *
+                sizeof(uint8), relief_fptr);
+        }
     }  /* end for line */
+
+    /* Temporary - write the deep shadow mask to raw binary output */
+    if (write_binary)
+    {
+        fwrite (deep_shad_mask, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), dsm_fptr);
+    }
 
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Shaded relief -- %% complete: 100%%\n");
 
     /* Temporary -- close the mask output files for raw binary output */
-    fclose (dem_fptr);
-    fclose (dsm_fptr);
-    fclose (relief_fptr);
+    if (write_binary)
+    {
+        fclose (dem_fptr);
+        fclose (dsm_fptr);
+        fclose (relief_fptr);
+    }
 
-    /* Free the TOA reflectance and brightness temperature pointers and
-       close the TOA reflectance and brightness temperature products */
+    /* Free the mask pointers */
+    if (dem != NULL)
+    {
+        free (dem);
+        dem = NULL;
+    }
+    if (shaded_relief != NULL)
+    {
+        free (shaded_relief);
+        shaded_relief = NULL;
+    }
+
+    /* Allocate memory for the snow count mask (full scene to handle
+       post-processing) */
+    snow_count = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
+        sizeof (uint8));
+    if (snow_count == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory (full scene) for the snow "
+            "count array");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Full scene post-processing of the snow cover pixels to count the
+       adjacent cloud pixels and to flag pixels with adjacent cloud, shadow,
+       or fill pixels */
+    if (verbose)
+        printf ("  Post-processing adjacent pixel snow count.\n");
+    count_adjacent_snow_cover (toa_input->nlines, toa_input->nsamps,
+        snow_mask, cloud_mask, deep_shad_mask, refl_qa_mask, btemp_qa_mask,
+        snow_count);
+
+    /* Write the data to the HDF file for the entire image. Note: look at the
+       order of the SDS names in out_sds_names for setting up the output
+       buffer correctly. */
+    if (verbose)
+        printf ("  Writing data to the HDF file.\n");
+    output->buf[0] = refl_qa_mask;
+    output->buf[1] = btemp_qa_mask;
+    output->buf[2] = snow_mask;
+    output->buf[3] = cloud_mask;
+    output->buf[4] = deep_shad_mask;
+    for (band = 0; band < NUM_OUT_SDS; band++)
+    {
+        if (put_output_line (output, band, 0, toa_input->nlines) != SUCCESS)
+        {
+            sprintf (errmsg, "Writing output data to HDF for band %d", band);
+            error_handler (true, FUNC_NAME, errmsg);
+            close_input (toa_input);
+            free_input (toa_input);
+            exit (ERROR);
+        }
+    }
+
+    /* Write the output metadata */
+    if (put_metadata (output, NUM_OUT_SDS, out_sds_names, QA_on, QA_off,
+        &toa_input->meta) != SUCCESS)
+    {
+        sprintf (errmsg, "Error writing metadata to the output HDF file");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Close the TOA reflectance and brightness temperature products and the
+       output snow cover product */
     close_input (toa_input);
+    close_output (output);
+    free_output (output);
+
+    /* Write the spatial information, after the file has been closed */
+    for (band = 0; band < NUM_OUT_SDS; band++)
+        out_sds_types[band] = DFNT_UINT8;
+    if (put_space_def_hdf (&space_def, sc_outfile, NUM_OUT_SDS, out_sds_names,
+        out_sds_types, hdf_grid_name) != SUCCESS)
+    {
+        sprintf (errmsg, "Error writing spatial metadata to the output HDF "
+            "file");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Temporary - write the adjacent snow cover count to raw binary output */
+    if (write_binary)
+    {
+        fwrite (snow_count, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), adj_count_fptr);
+    }
+
+    /* Temporary -- close the adjacent snow cover count file for raw binary
+       output */
+    if (write_binary)
+    {
+        fclose (adj_count_fptr);
+    }
+
+    /* Temporary -- write the ENVI headers */
+    if (write_binary)
+    {
+        if (verbose)
+            printf ("  Creating ENVI headers for each mask.\n");
+        if (write_envi_hdr ("snow_cover_mask.hdr", toa_input, &space_def)
+            == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("snow_cover_probability_score.hdr", toa_input,
+            &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("snow_cover_node.hdr", toa_input, &space_def)
+            == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("adjacent_snow_count.hdr", toa_input, &space_def)
+            == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("cloud_mask.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("deep_shadow_mask.hdr", toa_input, &space_def)
+            == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("shade_relief.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("toa_refl_qa.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("btemp_qa.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("ndsi.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("ndvi.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+    }
+
+    /* Free the TOA reflectance and brightness temperature pointers */
     free_input (toa_input);
-    toa_input = NULL;
 
     /* Free the filename pointers */
     if (toa_infile != NULL)
@@ -527,12 +799,18 @@ int main (int argc, char *argv[])
         free (sc_outfile);
 
     /* Free the mask pointers */
-    if (dem != NULL)
-        free (dem);
+    if (refl_qa_mask != NULL)
+        free (refl_qa_mask);
+    if (btemp_qa_mask != NULL)
+        free (btemp_qa_mask);
+    if (cloud_mask != NULL)
+        free (cloud_mask);
+    if (snow_mask != NULL)
+        free (snow_mask);
+    if (snow_count != NULL)
+        free (snow_count);
     if (deep_shad_mask != NULL)
         free (deep_shad_mask);
-    if (shaded_relief != NULL)
-        free (shaded_relief);
 
     /* Indicate successful completion of processing */
     printf ("Scene-based snow cover processing complete!\n");
@@ -566,7 +844,7 @@ void usage ()
             "--btemp=input_brightness_temperature_Landsat_filename "
             "--dem=input_DEM_filename "
             "--snow_cover=output_snow_cover_filename "
-            "[--verbose]\n");
+            "[--write_binary] [--verbose]\n");
 
     printf ("\nwhere the following parameters are required:\n");
     printf ("    -toa: name of the input Landsat TOA reflectance file to be "
@@ -577,6 +855,9 @@ void usage ()
             "(raw binary 16-bit integers)\n");
     printf ("    -snow_cover: name of the output snow cover file (HDF)\n");
     printf ("\nwhere the following parameters are optional:\n");
+    printf ("    -write_binary: should raw binary outputs and ENVI header "
+            "files be written in addition to the HDF file? (default is false)"
+            "\n");
     printf ("    -verbose: should intermediate messages be printed? (default "
             "is false)\n");
     printf ("\nscene_based_snow_cover --help will print the usage statement\n");
@@ -585,5 +866,5 @@ void usage ()
             "--btemp=lndth.LT50400331995173AAA02.hdf "
             "--dem=lsrd_scene_based_dem.bin "
             "--snow_cover=snow_cover.hdf "
-            "--verbose\n");
+            "--write_binary --verbose\n");
 }

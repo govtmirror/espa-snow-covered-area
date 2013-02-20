@@ -38,6 +38,15 @@
    since the shade relief input needs to be a factor of 3. */
 #define DEM_PROC_NLINES 300
 
+/* Structure for bounding geographic coords */
+typedef struct {
+  double min_lon;  /* Geodetic longitude coordinate (degrees) */ 
+  double min_lat;  /* Geodetic latitude coordinate (degrees) */ 
+  double max_lon;  /* Geodetic longitude coordinate (degrees) */ 
+  double max_lat;  /* Geodetic latitude coordinate (degrees) */ 
+  bool is_fill;    /* Flag to indicate whether the point is a fill value; */
+} Geo_bounds_t;
+
 /* Structure for the global metadata */
 typedef struct {
     char provider[STR_SIZE]; /* data provider type */
@@ -51,6 +60,7 @@ typedef struct {
     int path;                /* WRS path number */
     int row;                 /* WRS row number */
     float pixsize;           /* pixel size */
+    Geo_bounds_t bounds;     /* Geographic bounding coordinates */
     int refl_band[NBAND_REFL_MAX]; /* band numbers for TOA reflectance data */
     int btemp_band;          /* band number for brightness temp data */
 } Input_meta_t;

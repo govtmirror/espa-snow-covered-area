@@ -32,7 +32,8 @@ RM = rm -f
 EXTRA = -g -O -Wall
 
 # Define the include files
-INC = bool.h date.h error_handler.h input.h myhdf.h mystring.h sca.h
+INC = bool.h const.h date.h error_handler.h input.h myhdf.h mystring.h \
+output.h space.h sca.h
 INCDIR  = -I. -I$(HDFINC) -I$(HDFEOS_INC) -I$(GCTPINC) -I$(JPEGINC) -I$(SZIPINC) -I$(ZLIBINC)
 NCFLAGS = $(EXTRA) $(INCDIR)
 
@@ -44,9 +45,12 @@ SRC = cloud_cover_class.c \
       input.c             \
       myhdf.c             \
       mystring.c          \
+      output.c            \
       qa_mask.c           \
       shaded_relief.c     \
       snow_cover_class.c  \
+      space.c             \
+      write_envi_hdr.c    \
       scene_based_sca.c
 OBJ = $(SRC:.c=.o)
 

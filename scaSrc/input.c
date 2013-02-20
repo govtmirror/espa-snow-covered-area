@@ -16,6 +16,10 @@
 #define INPUT_FILL_VALUE ("_FillValue")
 #define INPUT_SATURATE_VALUE ("_SaturateValue")
 #define INPUT_SCALE_FACTOR ("scale_factor")
+#define INPUT_WEST_BOUND  ("WestBoundingCoordinate")
+#define INPUT_EAST_BOUND  ("EastBoundingCoordinate")
+#define INPUT_NORTH_BOUND ("NorthBoundingCoordinate")
+#define INPUT_SOUTH_BOUND ("SouthBoundingCoordinate")
 
 #define N_LSAT_WRS1_ROWS  (251)
 #define N_LSAT_WRS1_PATHS (233)
@@ -1071,6 +1075,92 @@ int get_input_meta
         return (ERROR);
     }
     meta->pixsize = dval[0];
+
+    /* Get the bounding coordinates if they are available */
+    meta->bounds.is_fill = false;
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 1;
+    attr.name = INPUT_WEST_BOUND;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Error reading the west bounding coordinate.  "
+            "Processing will continue but the bounding coordinates will not "
+            "be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    if (attr.nval != 1) 
+    {
+        strcpy (errmsg, "Invalid number of values for west bounding "
+            "coordinate.  Processing will continue but the bounding "
+            "coordinates will not be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    meta->bounds.min_lon = dval[0];
+
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 1;
+    attr.name = INPUT_EAST_BOUND;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Error reading the east bounding coordinate.  "
+            "Processing will continue but the bounding coordinates will not "
+            "be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    if (attr.nval != 1) 
+    {
+        strcpy (errmsg, "Invalid number of values for east bounding "
+            "coordinate.  Processing will continue but the bounding "
+            "coordinates will not be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    meta->bounds.max_lon = dval[0];
+
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 1;
+    attr.name = INPUT_NORTH_BOUND;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Error reading the north bounding coordinate.  "
+            "Processing will continue but the bounding coordinates will not "
+            "be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    if (attr.nval != 1) 
+    {
+        strcpy (errmsg, "Invalid number of values for north bounding "
+            "coordinate.  Processing will continue but the bounding "
+            "coordinates will not be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    meta->bounds.max_lat = dval[0];
+
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 1;
+    attr.name = INPUT_SOUTH_BOUND;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Error reading the south bounding coordinate.  "
+            "Processing will continue but the bounding coordinates will not "
+            "be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    if (attr.nval != 1) 
+    {
+        strcpy (errmsg, "Invalid number of values for south bounding "
+            "coordinate.  Processing will continue but the bounding "
+            "coordinates will not be written to the output SCA product.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->bounds.is_fill = true;
+    }
+    meta->bounds.min_lat = dval[0];
 
     /* Check WRS path/rows */
     if (!strcmp (meta->wrs_sys, "1"))
