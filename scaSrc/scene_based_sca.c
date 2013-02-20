@@ -860,8 +860,8 @@ void usage ()
             "\n");
     printf ("    -verbose: should intermediate messages be printed? (default "
             "is false)\n");
-    printf ("\nscene_based_snow_cover --help will print the usage statement\n");
-    printf ("\nExample: snow_cover "
+    printf ("\nscene_based_sca --help will print the usage statement\n");
+    printf ("\nExample: scene_based_sca "
             "--toa=lndcal.LT50400331995173AAA02.hdf "
             "--btemp=lndth.LT50400331995173AAA02.hdf "
             "--dem=lsrd_scene_based_dem.bin "

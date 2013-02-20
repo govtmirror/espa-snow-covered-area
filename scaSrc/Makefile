@@ -11,8 +11,8 @@
 #HDFEOS_LIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
 
 # Set the GCTP environment variables (as delivered with HDF-EOS)
-#GCTPINC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/gctp/include
-#GCTPLIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
+#HDFEOS_GCTPINC=/home/gschmidt/hdfeos2.17v1.00/hdfeos/gctp/include
+#HDFEOS_GCTPLIB=/home/gschmidt/hdfeos2.17v1.00/hdfeos/lib
 
 # Set the SZIP environment variables
 #SZIPINC=/home/gschmidt/szip-2.1/include
@@ -34,7 +34,7 @@ EXTRA = -g -O -Wall
 # Define the include files
 INC = bool.h const.h date.h error_handler.h input.h myhdf.h mystring.h \
 output.h space.h sca.h
-INCDIR  = -I. -I$(HDFINC) -I$(HDFEOS_INC) -I$(GCTPINC) -I$(JPEGINC) -I$(SZIPINC) -I$(ZLIBINC)
+INCDIR  = -I. -I$(HDFINC) -I$(HDFEOS_INC) -I$(HDFEOS_GCTPINC) -I$(JPEGINC) -I$(SZIPINC) -I$(ZLIBINC)
 NCFLAGS = $(EXTRA) $(INCDIR)
 
 # Define the source code and object files
@@ -57,7 +57,7 @@ OBJ = $(SRC:.c=.o)
 # Define the object libraries
 LIB   = -static -L$(HDFLIB) -lmfhdf -ldf -L$(ZLIBLIB) -lz -L$(SZIPLIB) -lsz \
         -L$(JPEGLIB) -ljpeg -L$(HDFLIB) -lxdr
-EOSLIB = -static -L$(HDFEOS_LIB) -lhdfeos -L$(GCTPLIB) -lGctp -lm
+EOSLIB = -static -L$(HDFEOS_LIB) -lhdfeos -L$(HDFEOS_GCTPLIB) -lGctp -lm
 
 # Define the executable
 EXE = scene_based_sca
