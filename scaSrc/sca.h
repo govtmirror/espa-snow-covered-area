@@ -22,6 +22,7 @@
 #define DEEP_SHADOW 255
 #define NO_DEEP_SHADOW 0
 #define ADJ_PIX_MASKED 255
+#define COMBINED_MASK 255
 
 /* Define the terrain-derived deep shadow threshold */
 #define TERRAIN_DEEP_SHADOW_THRESH 0.03
@@ -101,16 +102,11 @@ void count_adjacent_snow_cover
     int nlines,           /* I: number of lines in the data arrays */
     int nsamps,           /* I: number of samples in the data arrays */
     uint8 *snow_mask,     /* I: array of snow cover masked values */
-    uint8 *cloud_mask,    /* I: array of cloud masked values */
-    uint8 *shadow_mask,   /* I: array of deep shadow masked values */
-    uint8 *refl_qa_mask,  /* I: quality mask for the TOA reflectance products,
-                                where fill and saturated values are flagged */
-    uint8 *btemp_qa_mask, /* I: quality mask for the brightness temp products,
-                                where fill and saturated values are flagged */
+    uint8 *combined_mask, /* I: array of masked values for cloud, shadow, and
+                                fill */
     uint8 *snow_count     /* O: count of the snow cover results in the adjacent
                                 3x3 window, or high value if one or more of
                                 the adjacent pixels are cloud/shadow/fill */
-
 );
 
 float hillshade
@@ -183,6 +179,20 @@ void btemp_mask
     uint8 *btemp_qa_mask  /* O: array of masked values for processing (non-zero
                                 values are not to be processed) brightness
                                 temp bands */
+);
+
+void combine_qa_mask
+(
+    int nlines,           /* I: number of lines in the data arrays */
+    int nsamps,           /* I: number of samples in the data arrays */
+    uint8 *cloud_mask,    /* I: array of cloud masked values */
+    uint8 *shadow_mask,   /* I: array of deep shadow masked values */
+    uint8 *refl_qa_mask,  /* I: quality mask for the TOA reflectance products,
+                                where fill and saturated values are flagged */
+    uint8 *btemp_qa_mask, /* I: quality mask for the brightness temp products,
+                                where fill and saturated values are flagged */
+    uint8 *combined_qa    /* O: combined mask representing cloud, deep shadow,
+                                and fill for the current pixel */
 );
 
 int write_envi_hdr

@@ -1,9 +1,9 @@
 #include "sca.h"
 
 /* Define the output SDS names to be written to the HDF-EOS file */
-/* #define NUM_OUT_SDS 5 -- defined in output.h */
+/* #define NUM_OUT_SDS 6 -- defined in output.h */
 char *out_sds_names[NUM_OUT_SDS] = {"toa_refl_qa", "btemp_qa",
-    "snow_cover_mask", "cloud_mask", "deep_shadow_mask"};
+    "snow_cover_mask", "cloud_mask", "deep_shadow_mask", "combined_qa"};
 
 /******************************************************************************
 MODULE:  scene_based_sca
@@ -58,9 +58,9 @@ int main (int argc, char *argv[])
     char *dem_infile=NULL;   /* input DEM filename */
     char *sc_outfile=NULL;   /* output snow cover filename */
     char *QA_on[NUM_OUT_SDS] = {"fill", "fill", "snow", "cloud",
-                                "deep shadow"};
+                                "deep shadow", "cloud, shadow, or fill"};
     char *QA_off[NUM_OUT_SDS] = {"not fill", "not fill", "clear", "clear",
-                                 "clear"};
+                                 "clear", "clear"};
 
     int retval;              /* return status */
     int k;                   /* variable to keep track of the % complete */
@@ -85,6 +85,7 @@ int main (int argc, char *argv[])
     uint8 *btemp_qa_mask=NULL;/* quality mask for the brightness temp products,
                                 where fill and saturated values are flagged */
     uint8 *cloud_mask=NULL;  /* cloud mask */
+    uint8 *combined_qa=NULL; /* combined QA mask */
     uint8 *snow_mask=NULL;   /* snow cover mask */
     uint8 *snow_count=NULL;  /* snow count for adjacent pixels */
     uint8 *snow_prob=NULL;   /* snow cover probability score (percentage) */
@@ -105,6 +106,7 @@ int main (int argc, char *argv[])
     FILE *node_fptr=NULL;    /* tree node file pointer */
     FILE *adj_count_fptr=NULL; /* adjacent snow cover counter file pointer */
     FILE *cm_fptr=NULL;      /* cloud mask file pointer */
+    FILE *combined_fptr=NULL;  /* combined QA mask file pointer */
     FILE *dsm_fptr=NULL;     /* deep shadow mask file pointer */
     FILE *relief_fptr=NULL;  /* shade relief file pointer */
     FILE *refl_qa_fptr=NULL; /* TOA reflectance QA file pointer */
@@ -146,6 +148,7 @@ int main (int argc, char *argv[])
         relief_fptr = fopen ("shade_relief.bin", "wb");
         refl_qa_fptr = fopen ("toa_refl_qa.bin", "wb");
         btemp_qa_fptr = fopen ("btemp_qa.bin", "wb");
+        combined_fptr = fopen ("combined_qa.bin", "wb");
         ndsi_fptr = fopen ("ndsi.bin", "wb");
         ndvi_fptr = fopen ("ndvi.bin", "wb");
     }
@@ -661,6 +664,26 @@ int main (int argc, char *argv[])
         shaded_relief = NULL;
     }
 
+    /* Allocate memory for the combined QA mask (full scene to handle
+       post-processing) */
+    combined_qa = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
+        sizeof (uint8));
+    if (combined_qa == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory (full scene) for the "
+            "combined QA mask.");
+        error_handler (true, FUNC_NAME, errmsg);
+        close_input (toa_input);
+        free_input (toa_input);
+        exit (ERROR);
+    }
+
+    /* Combine the cloud, deep shadow, and fill QA masks */
+    if (verbose)
+        printf ("  Combining the cloud, deep shadow, and fill QA masks.\n");
+    combine_qa_mask (toa_input->nlines, toa_input->nsamps, cloud_mask,
+        deep_shad_mask, refl_qa_mask, btemp_qa_mask, combined_qa);
+
     /* Allocate memory for the snow count mask (full scene to handle
        post-processing) */
     snow_count = (uint8 *) calloc (toa_input->nlines * toa_input->nsamps,
@@ -681,8 +704,7 @@ int main (int argc, char *argv[])
     if (verbose)
         printf ("  Post-processing adjacent pixel snow count.\n");
     count_adjacent_snow_cover (toa_input->nlines, toa_input->nsamps,
-        snow_mask, cloud_mask, deep_shad_mask, refl_qa_mask, btemp_qa_mask,
-        snow_count);
+        snow_mask, combined_qa, snow_count);
 
     /* Write the data to the HDF file for the entire image. Note: look at the
        order of the SDS names in out_sds_names for setting up the output
@@ -694,6 +716,7 @@ int main (int argc, char *argv[])
     output->buf[2] = snow_mask;
     output->buf[3] = cloud_mask;
     output->buf[4] = deep_shad_mask;
+    output->buf[5] = combined_qa;
     for (band = 0; band < NUM_OUT_SDS; band++)
     {
         if (put_output_line (output, band, 0, toa_input->nlines) != SUCCESS)
@@ -737,18 +760,22 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Temporary - write the adjacent snow cover count to raw binary output */
+    /* Temporary - write the combined QA and adjacent snow cover count to
+       raw binary output */
     if (write_binary)
     {
+        fwrite (combined_qa, 1, toa_input->nlines * toa_input->nsamps *
+            sizeof(uint8), combined_fptr);
         fwrite (snow_count, 1, toa_input->nlines * toa_input->nsamps *
             sizeof(uint8), adj_count_fptr);
     }
 
-    /* Temporary -- close the adjacent snow cover count file for raw binary
-       output */
+    /* Temporary -- close the combined QA and adjacent snow cover count files
+       for raw binary output */
     if (write_binary)
     {
         fclose (adj_count_fptr);
+        fclose (combined_fptr);
     }
 
     /* Temporary -- write the ENVI headers */
@@ -778,6 +805,8 @@ int main (int argc, char *argv[])
         if (write_envi_hdr ("toa_refl_qa.hdr", toa_input, &space_def) == ERROR)
             exit (ERROR);
         if (write_envi_hdr ("btemp_qa.hdr", toa_input, &space_def) == ERROR)
+            exit (ERROR);
+        if (write_envi_hdr ("combined_qa.hdr", toa_input, &space_def) == ERROR)
             exit (ERROR);
         if (write_envi_hdr ("ndsi.hdr", toa_input, &space_def) == ERROR)
             exit (ERROR);
@@ -811,6 +840,8 @@ int main (int argc, char *argv[])
         free (snow_count);
     if (deep_shad_mask != NULL)
         free (deep_shad_mask);
+    if (combined_qa != NULL)
+        free (combined_qa);
 
     /* Indicate successful completion of processing */
     printf ("Scene-based snow cover processing complete!\n");

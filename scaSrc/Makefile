@@ -39,6 +39,7 @@ NCFLAGS = $(EXTRA) $(INCDIR)
 
 # Define the source code and object files
 SRC = cloud_cover_class.c \
+      combine_qa.c        \
       date.c              \
       error_handler.c     \
       get_args.c          \

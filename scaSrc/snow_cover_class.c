@@ -484,10 +484,10 @@ MODULE:  count_adjacent_snow_cover
 
 PURPOSE:  Performs an assessment of the snow cover results by counting the
     3x3 window around the current pixel and to determine if 1) there are
-    any adjacent cloud or fill values, and 2) count the number of adjacent
-    snow cover pixels.  If the current pixel has adjacent cloud, deep shadow,
-    or fill pixels, then flag that pixel as such.  Otherwise output the count
-    of adjacent snow pixels.
+    any adjacent cloud, shadow, or fill values, and 2) count the number of
+    adjacent snow cover pixels.  If the current pixel has adjacent cloud, deep
+    shadow, or fill pixels, then flag that pixel as such.  Otherwise output
+    the count of adjacent snow pixels.
 
 RETURN VALUE:
 Type = None
@@ -499,6 +499,8 @@ HISTORY:
 Date         Programmer       Reason
 ---------    ---------------  -------------------------------------
 2/13/2013    Gail Schmidt     Original Development
+2/21/2013    Gail Schmidt     Modified to use the combined QA mask vs. the
+                              individual cloud, deep shadow, and fill masks
 
 NOTES:
   1. Algorithm is based on the snow cover classification algorithm provided by
@@ -511,16 +513,11 @@ void count_adjacent_snow_cover
     int nlines,           /* I: number of lines in the data arrays */
     int nsamps,           /* I: number of samples in the data arrays */
     uint8 *snow_mask,     /* I: array of snow cover masked values */
-    uint8 *cloud_mask,    /* I: array of cloud masked values */
-    uint8 *shadow_mask,   /* I: array of deep shadow masked values */
-    uint8 *refl_qa_mask,  /* I: quality mask for the TOA reflectance products,
-                                where fill and saturated values are flagged */
-    uint8 *btemp_qa_mask, /* I: quality mask for the brightness temp products,
-                                where fill and saturated values are flagged */
+    uint8 *combined_mask, /* I: array of masked values for cloud, shadow, and
+                                fill */
     uint8 *snow_count     /* O: count of the snow cover results in the adjacent
                                 3x3 window, or high value if one or more of
                                 the adjacent pixels are cloud/shadow/fill */
-
 )
 {
     int count;              /* number of snow-covered pixels in NxN window */
@@ -576,10 +573,7 @@ void count_adjacent_snow_cover
                        flag it and move to the next pixel in the image.
                        Otherwise keep track of the count of adjacent snow
                        pixels. */
-                    if (cloud_mask[win_pix] == CLOUD_COVER ||
-                        refl_qa_mask[win_pix] == NO_DATA ||
-                        btemp_qa_mask[win_pix] == NO_DATA ||
-                        shadow_mask[win_pix] == DEEP_SHADOW)
+                    if (combined_mask[win_pix] == COMBINED_MASK)
                     {
                         snow_count[pix] = ADJ_PIX_MASKED;
                         win_line = end_window_line+1;  /* make sure we break

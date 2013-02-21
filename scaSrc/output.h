@@ -7,7 +7,7 @@
 
 /* Define the number of SDS that will be output to the HDF-EOS file.  The
    actual SDS names are defined at the top of scene_based_sca.c. */
-#define NUM_OUT_SDS 5
+#define NUM_OUT_SDS 6
 
 /* Structure for the 'output' data type */
 typedef struct {
