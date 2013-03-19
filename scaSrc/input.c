@@ -1083,7 +1083,7 @@ int get_input_meta
     attr.name = INPUT_WEST_BOUND;
     if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
     {
-        strcpy (errmsg, "Error reading the west bounding coordinate.  "
+        strcpy (errmsg, "Unable to read the west bounding coordinate.  "
             "Processing will continue but the bounding coordinates will not "
             "be written to the output SCA product.");
         error_handler (false, FUNC_NAME, errmsg);
@@ -1104,7 +1104,7 @@ int get_input_meta
     attr.name = INPUT_EAST_BOUND;
     if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
     {
-        strcpy (errmsg, "Error reading the east bounding coordinate.  "
+        strcpy (errmsg, "Unable to read the east bounding coordinate.  "
             "Processing will continue but the bounding coordinates will not "
             "be written to the output SCA product.");
         error_handler (false, FUNC_NAME, errmsg);
@@ -1125,7 +1125,7 @@ int get_input_meta
     attr.name = INPUT_NORTH_BOUND;
     if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
     {
-        strcpy (errmsg, "Error reading the north bounding coordinate.  "
+        strcpy (errmsg, "Unable to read the north bounding coordinate.  "
             "Processing will continue but the bounding coordinates will not "
             "be written to the output SCA product.");
         error_handler (false, FUNC_NAME, errmsg);
@@ -1146,7 +1146,7 @@ int get_input_meta
     attr.name = INPUT_SOUTH_BOUND;
     if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
     {
-        strcpy (errmsg, "Error reading the south bounding coordinate.  "
+        strcpy (errmsg, "Unable to read the south bounding coordinate.  "
             "Processing will continue but the bounding coordinates will not "
             "be written to the output SCA product.");
         error_handler (false, FUNC_NAME, errmsg);

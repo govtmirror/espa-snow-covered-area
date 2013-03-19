@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "error_handler.h"
 
-#define SCA_VERSION "1.0.0"
+#define SCA_VERSION "1.1.0"
 
 #define STR_SIZE 1024
 

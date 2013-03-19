@@ -31,6 +31,8 @@ Date          Programmer       Reason
 2/13/2012     Gail Schmidt     Added support for counting the number of adjacent
                                snow-covered pixels
 2/15/2013     Gail Schmidt     Added support for HDF-EOS output files
+2/21/2013     Gail Schmidt     Added support for a combined QA mask for clouds,
+                               deep shadows, and fill QA pixels
 
 NOTES:
   1. The scene-based snow cover mask is based on an algorithm developed by

@@ -1,5 +1,15 @@
 #include "sca.h"
 
+/* ENVI projection numbers for UTM and PS */
+#define ENVI_GEO_PROJ 1
+#define ENVI_UTM_PROJ 2
+#define ENVI_PS_PROJ 31
+
+/* GCTP projection numbers for UTM and PS */
+#define GCTP_GEO_PROJ 0
+#define GCTP_UTM_PROJ 1
+#define GCTP_PS_PROJ 6 
+
 /******************************************************************************
 MODULE:  write_envi_hdr
 
@@ -20,6 +30,7 @@ HISTORY:
 Date        Programmer       Reason
 --------    ---------------  -------------------------------------
 2/8/2013    Gail Schmidt     Original Development
+3/19/2013   Gail Schmidt     Modified to support Polar Stereographic products
 
 NOTES:
   1. It's assumed the header file will be for unsigned byte products and
@@ -47,10 +58,12 @@ int write_envi_hdr
         return (ERROR);
     }
 
-    /* Verify the projection is UTM and sphere is WGS-84 */
-    if (space_def->proj_num != 1)
+    /* Verify the projection is UTM or PS and sphere is WGS-84 */
+    if (space_def->proj_num != GCTP_UTM_PROJ &&
+        space_def->proj_num != GCTP_PS_PROJ)
     {
-        sprintf (errmsg, "Error UTM projection code (1) expected.");
+        sprintf (errmsg, "Error UTM projection code (%d) or PS projection "
+            "code (%d) expected.", GCTP_UTM_PROJ, GCTP_PS_PROJ);
         error_handler (true, FUNC_NAME, errmsg);
         return (ERROR);
     }
@@ -61,7 +74,6 @@ int write_envi_hdr
         error_handler (true, FUNC_NAME, errmsg);
         return (ERROR);
     }
-
 
     /* Create the name of the associated raw binary file by replacing the
        .hdr of the header filename with .bin for the output binary file */
@@ -79,11 +91,38 @@ int write_envi_hdr
         "file type = ENVI Standard\n"
         "data type = 1\n"
         "interleave = bsq\n"
-        "byte order = 0\n"
-        "map info = {UTM, 1, 1, %f, %f, %f, %f, %d, North, WGS-84}\n"
-        "band names = {Band 1}\n", bin_file, toa_input->nsamps,
-            toa_input->nlines, space_def->ul_corner.x, space_def->ul_corner.y,
-            space_def->pixel_size, space_def->pixel_size, space_def->zone);
+        "byte order = 0\n", bin_file, toa_input->nsamps, toa_input->nlines);
+   
+    if (space_def->proj_num == GCTP_UTM_PROJ)
+    {
+        if (space_def->zone > 0)
+            fprintf (hdr_fptr,
+                "map info = {UTM, 1.000, 1.000, %f, %f, %f, %f, %d, North, "
+                "WGS-84, units=Meters}\n", space_def->ul_corner.x,
+                space_def->ul_corner.y, space_def->pixel_size,
+                space_def->pixel_size, space_def->zone);
+        else
+            fprintf (hdr_fptr,
+                "map info = {UTM, 1.000, 1.000, %f, %f, %f, %f, %d, South, "
+                "WGS-84, units=Meters}\n", space_def->ul_corner.x,
+                space_def->ul_corner.y, space_def->pixel_size,
+                space_def->pixel_size, -(space_def->zone));
+    }
+    else if (space_def->proj_num == GCTP_PS_PROJ)
+    {
+        fprintf (hdr_fptr,
+            "map info = {Polar Stereographic, 1.000, 1.000, %f, %f, %f, %f, "
+            "WGS-84, units=Meters}\n", space_def->ul_corner.x,
+            space_def->ul_corner.y, space_def->pixel_size,
+            space_def->pixel_size);
+        fprintf (hdr_fptr,
+            "projection info = {%d, 6378137.0, 6356752.314245179, %lf, "
+            "%lf, %lf, %lf, WGS-84, Polar Stereographic, units=Meters}\n",
+            ENVI_PS_PROJ, space_def->proj_param[5], space_def->proj_param[4],
+            space_def->proj_param[6], space_def->proj_param[7]);
+    }
+
+    fprintf (hdr_fptr, "band names = {Band 1}\n");
 
     /* Close the header file and free pointers */
     fclose (hdr_fptr);
