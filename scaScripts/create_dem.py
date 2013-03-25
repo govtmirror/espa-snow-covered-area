@@ -6,8 +6,19 @@ import commands
 import datetime
 from optparse import OptionParser
 
+### Error/Success codes ###
 ERROR = 1
 SUCCESS = 0
+
+### ENVI projection numbers for UTM and PS ###
+ENVI_GEO_PROJ = 1
+ENVI_UTM_PROJ = 2
+ENVI_PS_PROJ = 31
+
+### GCTP projection numbers for UTM and PS ###
+GCTP_GEO_PROJ = 0
+GCTP_UTM_PROJ = 1
+GCTP_PS_PROJ = 6
 
 ############################################################################
 # Description: logIt logs the information to the logfile (if valid) or to
@@ -39,6 +50,8 @@ def logIt (msg, log_handler):
 #   Updated on 2/6/2013 by Gail Schmidt, USGS/EROS
 #   Changed the script to update the map projection information in the GDAL
 #     header file to reflect the correct projection and not Geographic.
+#   Updated on 3/20/2013 by Gail Schmidt, USGS/EROS
+#   Modified to support Polar Stereographic projections.
 #
 # Usage: create_dem.py --help prints the help message
 ############################################################################
@@ -106,8 +119,18 @@ class SceneDEM():
             # if the current line contains "map info" then we want to modify
             # this line with the new projection info
             if myline.find ('map info') >= 0:
-                map_info_str = "map info = {UTM, 1, 1, %f, %f, %f, %f, %d, North, WGS-84}\n" % (self.ul_proj_x, self.ul_proj_y, self.pixsize, self.pixsize, self.utm_zone)
-                tempf.write (map_info_str)
+                if (self.map_proj == "UTM"):
+                    if self.utm_zone > 0:
+                        map_info_str = "map info = {UTM, 1.000, 1.000, %f, %f, %f, %f, %d, North, WGS-84, units=Meters}\n" % (self.ul_proj_x, self.ul_proj_y, self.pixsize, self.pixsize, self.utm_zone)
+                    else:
+                        map_info_str = "map info = {UTM, 1.000, 1.000, %f, %f, %f, %f, %d, South, WGS-84, units=Meters}\n" % (self.ul_proj_x, self.ul_proj_y, self.pixsize, self.pixsize, -self.utm_zone)
+                    tempf.write (map_info_str)
+                elif (self.map_proj == "PS"):
+                    map_info_str = "map info = {Polar Stereographic, 1.000, 1.000, %f, %f, %f, %f, WGS-84, units=Meters}\n" % (self.ul_proj_x, self.ul_proj_y, self.pixsize, self.pixsize)
+                    tempf.write (map_info_str)
+                    proj_info_str = "projection info = {%d, 6378137.0, 6356752.314245179, %f, %f, %f, %f, WGS-84, Polar Stereographic, units=Meters}\n" % (ENVI_PS_PROJ, self.true_scale_lat, self.vert_lon_from_pole, self.false_east, self.false_north)
+                    tempf.write (proj_info_str)
+
             else:
                 # copy this line as-is to the temporary header file
                 tempf.write (line)
@@ -257,6 +280,12 @@ class SceneDEM():
                 logIt (msg, log_handler)
                 return ERROR
 
+        # convert the UL corner to represent the UL corner of the pixel
+        # instead of the center of the pixel.  the coords in the MTL file
+        # represent the center of the pixel.
+        self.ul_proj_x -= 0.5 * self.pixsize
+        self.ul_proj_y += 0.5 * self.pixsize
+
         # successful completion
         return SUCCESS
 
@@ -300,7 +329,7 @@ class SceneDEM():
         elif (self.map_proj == "PS"):
             # GAIL finish!!  Add support for the projection params, which are
             # then read by makegeomgrid/get_proj_info_toa_refl.c
-            omf_list.append ('  TARGET_PROJECTION = ???\n')
+            omf_list.append ('  TARGET_PROJECTION = 6\n')
         msg = '  GRID_FILENAME_PASS_1 = \"%s\"\n\n' % metafile
         omf_list.append (msg)
         omf_list.append ('END_OBJECT = OMF\n')
