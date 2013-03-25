@@ -20,6 +20,8 @@
 #define INPUT_EAST_BOUND  ("EastBoundingCoordinate")
 #define INPUT_NORTH_BOUND ("NorthBoundingCoordinate")
 #define INPUT_SOUTH_BOUND ("SouthBoundingCoordinate")
+#define INPUT_UL_LAT_LONG ("UpperLeftCornerLatLong")
+#define INPUT_LR_LAT_LONG ("LowerRightCornerLatLong")
 
 #define N_LSAT_WRS1_ROWS  (251)
 #define N_LSAT_WRS1_PATHS (233)
@@ -816,6 +818,7 @@ Date        Programmer       Reason
 --------    ---------------  -------------------------------------
 1/2/2012    Gail Schmidt     Original Development (based on input routines
                              from the LEDAPS lndsr application)
+3/22/2013   Gail Schmidt     Modified to read the UL and LR lat/long coords
 
 NOTES:
 ******************************************************************************/
@@ -1076,6 +1079,55 @@ int get_input_meta
     }
     meta->pixsize = dval[0];
 
+    /* Get the upper left and lower right corners */
+    meta->ul_corner.is_fill = false;
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 2;
+    attr.name = INPUT_UL_LAT_LONG;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Unable to read the UL lat/long coordinates.  "
+            "Processing will continue but the scene will be assumed to be "
+            "a normal, north-up scene and not an ascending polar scene.  Thus "
+            "the solar azimuth will be used as-is and not adjusted if the "
+            "scene is flipped.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->ul_corner.is_fill = true;
+    }
+    if (attr.nval != 2) 
+    {
+        strcpy (errmsg, "Invalid number of values for the UL lat/long "
+            "coordinate.");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+    meta->ul_corner.lat = dval[0];
+    meta->ul_corner.lon = dval[1];
+
+    meta->lr_corner.is_fill = false;
+    attr.type = DFNT_FLOAT32;
+    attr.nval = 2;
+    attr.name = INPUT_LR_LAT_LONG;
+    if (get_attr_double (this->refl_sds_file_id, &attr, dval) != SUCCESS)
+    {
+        strcpy (errmsg, "Unable to read the LR lat/long coordinates.  "
+            "Processing will continue but the scene will be assumed to be "
+            "a normal, north-up scene and not an ascending polar scene.  Thus "
+            "the solar azimuth will be used as-is and not adjusted if the "
+            "scene is flipped.");
+        error_handler (false, FUNC_NAME, errmsg);
+        meta->lr_corner.is_fill = true;
+    }
+    if (attr.nval != 2) 
+    {
+        strcpy (errmsg, "Invalid number of values for the LR lat/long "
+            "coordinate.");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+    meta->lr_corner.lat = dval[0];
+    meta->lr_corner.lon = dval[1];
+
     /* Get the bounding coordinates if they are available */
     meta->bounds.is_fill = false;
     attr.type = DFNT_FLOAT32;
@@ -1161,6 +1213,11 @@ int get_input_meta
         meta->bounds.is_fill = true;
     }
     meta->bounds.min_lat = dval[0];
+printf ("DEBUG: Bounding coords:\n");
+printf ("DEBUG:   West - %f\n", meta->bounds.min_lon);
+printf ("DEBUG:   East - %f\n", meta->bounds.max_lon);
+printf ("DEBUG:   North - %f\n", meta->bounds.max_lat);
+printf ("DEBUG:   South - %f\n", meta->bounds.min_lat);
 
     /* Check WRS path/rows */
     if (!strcmp (meta->wrs_sys, "1"))

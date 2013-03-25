@@ -33,6 +33,9 @@ Date          Programmer       Reason
 2/15/2013     Gail Schmidt     Added support for HDF-EOS output files
 2/21/2013     Gail Schmidt     Added support for a combined QA mask for clouds,
                                deep shadows, and fill QA pixels
+3/21/2013     Gail Schmidt     Modifed to support polar stereographic products
+3/21/2013     Gail Schmidt     Adjusted the solar azimuth if the scene is
+                               flipped/ascending
 
 NOTES:
   1. The scene-based snow cover mask is based on an algorithm developed by
@@ -536,6 +539,22 @@ int main (int argc, char *argv[])
         close_input (toa_input);
         free_input (toa_input);
         exit (ERROR);
+    }
+
+    /* If the scene is an ascending polar scene (flipped upside down), then
+       the solar azimuth needs to be adjusted by 180 degrees.  The scene in
+       this case would be north down and the solar azimuth is based on north
+       being up. */
+    if (!toa_input->meta.ul_corner.is_fill &&
+        !toa_input->meta.lr_corner.is_fill &&
+        toa_input->meta.ul_corner.lat < toa_input->meta.lr_corner.lat)
+    {
+        toa_input->meta.solar_az += 180.0*RAD;
+        if (toa_input->meta.solar_az > 360*RAD)
+            toa_input->meta.solar_az -= 360*RAD;
+        printf ("  Polar or ascending scene.  Readjusting solar azimuth by "
+            "180 degrees.\n    New value: %f radians (%f degrees)\n",
+            toa_input->meta.solar_az, toa_input->meta.solar_az*DEG);
     }
 
     /* Print the processing status if verbose */

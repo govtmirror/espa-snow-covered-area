@@ -47,6 +47,14 @@ typedef struct {
   bool is_fill;    /* Flag to indicate whether the point is a fill value; */
 } Geo_bounds_t;
 
+/* Structure for lat/long coordinates */
+typedef struct {
+  double lon;           /* Geodetic longitude coordinate (degrees) */ 
+  double lat;           /* Geodetic latitude coordinate (degrees) */ 
+  bool is_fill;         /* Flag to indicate whether the point is a fill value;
+                           'true' = fill; 'false' = not fill */
+} Geo_coord_t;
+
 /* Structure for the global metadata */
 typedef struct {
     char provider[STR_SIZE]; /* data provider type */
@@ -60,6 +68,8 @@ typedef struct {
     int path;                /* WRS path number */
     int row;                 /* WRS row number */
     float pixsize;           /* pixel size */
+    Geo_coord_t ul_corner;   /* UL lat/long corner coord */
+    Geo_coord_t lr_corner;   /* LR lat/long corner coord */
     Geo_bounds_t bounds;     /* Geographic bounding coordinates */
     int refl_band[NBAND_REFL_MAX]; /* band numbers for TOA reflectance data */
     int btemp_band;          /* band number for brightness temp data */
