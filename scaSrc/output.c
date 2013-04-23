@@ -494,6 +494,8 @@ Date         Programmer       Reason
 ---------    ---------------  -------------------------------------
 2/12/2012    Gail Schmidt     Original Development (based on input routines
                               from the LEDAPS lndsr application)
+4/10/2013    Gail Schmidt     Corrected the output of the solar zenith value.
+                              Previously we were writing the solar elevation.
 
 NOTES:
 ******************************************************************************/
@@ -609,10 +611,11 @@ int put_metadata
         return (ERROR);
     }
   
+    /* writing solar zenith, therefore need to use 90 - elev for the zenith */
     attr.type = DFNT_FLOAT32;
     attr.nval = 1;
     attr.name = OUTPUT_SUN_ZEN;
-    dval[0] = (double)meta->solar_elev * DEG;
+    dval[0] = (double)(90.0 - meta->solar_elev) * DEG;
     if (put_attr_double (this->sds_file_id, &attr, dval) != SUCCESS)
     {
         sprintf (errmsg, "Error writing attribute (solar zenith)");

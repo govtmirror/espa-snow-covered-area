@@ -32,10 +32,10 @@ SRC = cloud_cover_class.c \
 OBJ = $(SRC:.c=.o)
 
 # Define the object libraries
-##LIB   = -L$(HDFLIB) -lmfhdf -ldf -lxdr -L$(JPEGLIB) -ljpeg \
-##        -L$(ZLIBLIB) -lz -L$(SZIPLIB) -lsz -lm
 LIB   = -L$(HDFLIB) -lmfhdf -ldf -lxdr -L$(JPEGLIB) -ljpeg \
-        -L$(ZLIBLIB) -lz -L$(SZIPLIB)/libsz.a -lm
+        -L$(ZLIBLIB) -lz -L$(SZIPLIB) -lsz -lm
+##LIB   = -L$(HDFLIB) -lmfhdf -ldf -lxdr -L$(JPEGLIB) -ljpeg \
+##        -L$(ZLIBLIB) -lz -L$(SZIPLIB)/libsz.a -lm
 EOSLIB = -L$(HDFEOS_LIB) -lhdfeos -L$(HDFEOS_GCTPLIB) -lGctp
 
 # Define the executable

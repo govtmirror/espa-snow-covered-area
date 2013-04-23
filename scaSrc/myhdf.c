@@ -486,6 +486,10 @@ Date        Programmer       Reason
 --------    ---------------  -------------------------------------
 1/3/2012    Gail Schmidt     Original Development (based on input routines
                              from the LEDAPS lndsr application)
+1/8/2013    Gail Schmidt     Modified to not add 0.5 to the floating point
+                             attribute values before writing to the HDF file.
+                             That is only appropriate when converting float to
+                             int and not float to float.
 
 NOTES:
 ******************************************************************************/
@@ -632,10 +636,8 @@ int put_attr_double
                 val_float32[i] = MYHDF_FLOAT32H;
             else if (val[i] <= ((double)MYHDF_FLOAT32L))
                 val_float32[i] = MYHDF_FLOAT32L;
-            else if (val[i] >= 0.0)
-                val_float32[i] = (float32)( val[i] + 0.5);
             else
-                val_float32[i] = -((float32)(-val[i] + 0.5));
+                val_float32[i] = (float32) val[i];
         }
         buf = (void *)val_float32;
         break;
