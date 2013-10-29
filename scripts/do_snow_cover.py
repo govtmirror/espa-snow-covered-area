@@ -1,46 +1,40 @@
 #! /usr/bin/env python
+
+'''
+Created on January 29, 2013 by Gail Schmidt, USGS/EROS
+
+License:
+  "NASA Open Source Agreement 1.3"
+
+Description:
+  Run the scene-based snow cover algorithm, including checking processing
+  status.
+
+History:
+  Updated on ??? by Gail Schmidt, USGS/EROS
+    - {specify modifications}
+  Updated on October/2013 by Ron Dilley, USGS/EROS
+    - Modified to use espa-common.
+    - Modified to require the DEM file to use on the command line.
+
+Usage:
+  do_snow_cover.py --help prints the help message
+'''
+
 import sys
 import os
 import re
 import commands
 import datetime
 from optparse import OptionParser
-from create_dem import SceneDEM
 
-ERROR = 1
-SUCCESS = 0
+from espa_constants import *
+from espa_logging import log
 
-############################################################################
-# Description: logIt logs the information to the logfile (if valid) or to
-# stdout if the logfile is None.
-#
-# Inputs:
-#   msg - message to be printed/logged
-#   log_handler - log file handler; if None then print to stdout
-#
-# Returns: nothing
-#
-# Notes:
-############################################################################
-def logIt (msg, log_handler):
-    if log_handler == None:
-        print msg
-    else:
-        log_handler.write (msg + '\n')
-
-
-#############################################################################
-# Created on January 29, 2013 by Gail Schmidt, USGS/EROS
-# Created Python script to run the scene-based DEM and scene-based snow
-# cover algorithms in one shot, including checking processing status.
-#
-# History:
-#   Updated on ??? by Gail Schmidt, USGS/EROS
-#   {specify modifications}
-#
-# Usage: do_snow_cover.py --help prints the help message
-############################################################################
 class Sca():
+    '''
+    Defines the class object for performing snow covered area processing
+    '''
 
     def __init__(self):
         pass
@@ -57,6 +51,7 @@ class Sca():
     # Inputs:
     #   metafile - name of the Landsat metadata file to be processed
     #   toa_infile - name of the input TOA reflectance HDF file to be processed
+    #   dem - name of an ENVI formatted DEM file
     #   btemp_infile - name of the input brightness temp HDF file to
     #       be processed
     #   sca_outfile - name of the output snow cover HDF file
@@ -84,8 +79,8 @@ class Sca():
     #      but only the output HDF-EOS product should be delivered to the
     #      general public.
     #######################################################################
-    def runSca (self, metafile=None, toa_infile=None, btemp_infile=None, \
-        sca_outfile=None, logfile=None, usebin=None):
+    def runSca (self, metafile=None, toa_infile=None, dem=None, \
+        btemp_infile=None, sca_outfile=None, logfile=None, usebin=None):
         # if no parameters were passed then get the info from the
         # command line
         if metafile == None:
@@ -97,6 +92,9 @@ class Sca():
             parser.add_option ("-t", "--toa_infile", type="string",
                 dest="toa_infile",
                 help="name of TOA reflectance HDF file", metavar="FILE")
+            parser.add_option ('--dem', type='string',
+                dest='dem',
+                help="name of an ENVI formatted DEM file", metavar='FILE')
             parser.add_option ("-b", "--btemp_infile", type="string",
                 dest="btemp_infile",
                 help="name of brightness temperature HDF file", metavar="FILE")
@@ -125,7 +123,15 @@ class Sca():
             if toa_infile == None:
                 parser.error ("missing TOA input file command-line argument");
                 return ERROR
-        
+
+            # ENVI DEM file
+            if dem == None:
+                dem = options.dem
+                if dem == None:
+                    parser.error ("missing input dem file command-line" \
+                        " argument");
+                    return ERROR
+
             # brightness temp file
             btemp_infile = options.btemp_infile
             if btemp_infile == None:
@@ -138,12 +144,9 @@ class Sca():
                 parser.error ("missing snow cover output file command-line argument");
                 return ERROR
         
-        # open the log file if it exists; use line buffering for the output
-        log_handler = None
-        if logfile != None:
-            log_handler = open (logfile, 'w', buffering=1)
+        # let the world know what we are processing
         msg = 'SCA processing of Landsat metadata file: %s' % metafile
-        logIt (msg, log_handler)
+        log (msg)
         
         # should we expect the DEM and SCA applications to be in the PATH or
         # in the BIN directory?
@@ -152,23 +155,23 @@ class Sca():
             bin_dir = os.environ.get('BIN')
             bin_dir = bin_dir + '/'
             msg = 'BIN environment variable: %s' % bin_dir
-            logIt (msg, log_handler)
+            log (msg)
         else:
             # don't use a path to the DEM/SCA applications
             bin_dir = ""
             msg = 'DEM and SCA executables expected to be in the PATH'
-            logIt (msg, log_handler)
+            log (msg)
         
         # make sure the metadata file exists
         if not os.path.isfile(metafile):
             msg = "Error: metadata file does not exist or is not accessible: " + metafile
-            logIt (msg, log_handler)
+            log (msg)
             return ERROR
 
         # use the base metadata filename and not the full path.
         base_metafile = os.path.basename (metafile)
         msg = 'Processing metadata file: %s' % base_metafile
-        logIt (msg, log_handler)
+        log (msg)
         
         # get the path of the MTL file and change directory to that location
         # for running this script.  save the current working directory for
@@ -180,44 +183,39 @@ class Sca():
         metadir = os.path.dirname (os.path.abspath (metafile))
         if not os.access(metadir, os.W_OK):
             msg = 'Path of metadata file is not writable: %s.  Script needs write access to the metadata directory.' % metadir
-            logIt (msg, log_handler)
+            log (msg)
             return ERROR
         msg = 'Changing directories for snow cover processing: %s' % metadir
-        logIt (msg, log_handler)
+        log (msg)
         os.chdir (metadir)
-
-        # instantiate the SceneDEM class for use and create the scene-based
-        # DEM for use with the snow cover
-        dem = SceneDEM ()
-        status = dem.createDEM (base_metafile, logfile, log_handler, usebin)
-        if status != SUCCESS:
-            msg = 'Error creating scene-based DEM.  Processing will terminate.'
-            logIt (msg, log_handler)
-            os.chdir (mydir)
-            return ERROR
 
         # run snow cover algorithm, checking the return status of each module.
         # exit if any errors occur.
-        cmdstr = "%sscene_based_sca --toa=%s --btemp=%s --dem=%s --snow_cover=%s --write_binary --verbose" % (bin_dir, toa_infile, btemp_infile, dem.scene_dem_envi, sca_outfile)
+        cmdstr = "%sscene_based_sca --toa=%s --btemp=%s --dem=%s --snow_cover=%s --write_binary --verbose" % (bin_dir, toa_infile, btemp_infile, dem, sca_outfile)
 #        print 'DEBUG: scene_based_sca command: %s' % cmdstr
         (status, output) = commands.getstatusoutput (cmdstr)
-        logIt (output, log_handler)
+        log (output)
         exit_code = status >> 8
         if exit_code != 0:
             msg = 'Error running scene_based_sca.  Processing will terminate.'
-            logIt (msg, log_handler)
+            log (msg)
             os.chdir (mydir)
             return ERROR
         
         # successful completion.  return to the original directory.
         os.chdir (mydir)
         msg = 'Completion of scene based snow cover.'
-        logIt (msg, log_handler)
-        if logfile != None:
-            log_handler.close()
+        log (msg)
+
         return SUCCESS
 
 ######end of Sca class######
 
 if __name__ == "__main__":
-    sys.exit (Sca().runSca())
+    return_value = Sca().runSca()
+
+    if (return_value != SUCCESS):
+        sys.exit (EXIT_FAILURE)
+    else:
+        sys.exit (EXIT_SUCCESS)
+
