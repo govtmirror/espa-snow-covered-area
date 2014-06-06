@@ -330,6 +330,8 @@ int free_output
     if (this != NULL)
     {
         /* Free the band data */
+        free (this->metadata.band[REVISED_CM].class_values);
+        free (this->metadata.band[REVISED_LIM_CM].class_values);
         free (this->metadata.band);
 
         /* Free the data structure */
