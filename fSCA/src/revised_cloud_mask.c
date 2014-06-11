@@ -481,10 +481,10 @@ int main (int argc, char *argv[])
 
     /* Print the processing status if verbose */
     if (verbose)
-        printf ("  Running the boosted rule-based models\n");
+        printf ("  Running the rule-based models\n");
 
-    /* Run the boosted rule-based models one line at a time to compute the
-       revised cloud masks */
+    /* Run the rule-based models one line at a time to compute the revised
+       cloud masks */
     for (line = 0; line < refl_input->nlines; line++)
     {
         /* Read the reflectance bands */
@@ -559,8 +559,9 @@ int main (int argc, char *argv[])
         }
 
         /* Run the rule-based models on all the input data */
-        boosted_model (refl_input, ndsi, ndvi, b1_var, b2_var, b4_var, b5_var,
-            b7_var, ndvi_var, ndsi_var, refl_input->nsamps, rev_cm, rev_lim_cm);
+        rule_based_model (refl_input, ndsi, ndvi, b1_var, b2_var, b4_var,
+            b5_var, b7_var, ndvi_var, ndsi_var, refl_input->nsamps, rev_cm,
+            rev_lim_cm);
 
         /* Write the revised cloud masks */
         if (put_output_lines (cm_output, rev_cm, REVISED_CM, line, 1,

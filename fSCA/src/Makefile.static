@@ -13,7 +13,7 @@ INCDIR  = -I. -I$(XML2INC) -I$(ESPAINC) -I$(OPENCVINC) -I$(BOOST_INC)
 NCFLAGS = $(EXTRA) $(INCDIR)
 
 # Define the source code and object files
-SRC = boosted_rule_based_model.c \
+SRC = rule_based_model.c \
       buffer.c            \
       get_args.c          \
       input.c             \

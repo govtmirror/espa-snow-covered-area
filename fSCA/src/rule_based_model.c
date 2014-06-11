@@ -3,13 +3,12 @@
 #include "revised_cloud_mask.h"
 
 /******************************************************************************
-MODULE:  boosted_model
+MODULE:  rule_based_model
 
-PURPOSE:  Runs the boosted rule-based models on the input line of data,
-including the reflectance bands, NDVI, NDSI, and the variance for each of
-those products.  Five model runs are made per model, and there are two models.
-The first model uses the variances and the second model does not use the
-variances.
+PURPOSE:  Runs the rule-based models on the input line of data, including the
+reflectance bands, NDVI, NDSI, and the variance for each of those products.
+Five model runs are made per model, and there are two models.  The first model
+uses the variances and the second model does not use the variances.
 
 RETURN VALUE:
 Type = none
@@ -31,7 +30,7 @@ NOTES:
      need to be unscaled before being used by the model.  The SCALE_FACTOR in
      output.h will be applied to unscale these values.
 ******************************************************************************/
-void boosted_model
+void rule_based_model
 (
     Input_t *input_img,     /* I: pointer to input data structure containing
                                   the scaled reflectance and cloud mask
@@ -61,7 +60,6 @@ void boosted_model
     int16 m3_lim_cloud_code;  /* limited cloud mask for 3rd Rule-based model */
     int16 m4_lim_cloud_code;  /* limited cloud mask for 4th Rule-based model */
     int16 m5_lim_cloud_code;  /* limited cloud mask for 5th Rule-based model */
-    int16 boosted_cloud_code; /* boosted algorithm cloud code */
     int16 conserv_cloud_code; /* maximum of the model runs for the
                                  conservative cloud code */
     int16 limited_cloud_code; /* maximum of the model runs for the
@@ -71,7 +69,6 @@ void boosted_model
                                       reflectance bands */
     double ndvi, ndsi;    /* pixel values for the NDVI and NDSI bands */
     double ndvi_var, ndsi_var;  /* pixel values for NDVI and NDSI variances */
-    float avg_cloud_code;  /* average of the cloud codes for the model runs */
 
     /* Initialize the revised cloud mask to all zeros */
     memset (rev_cloud_mask, 0, nsamps * sizeof (uint8));
@@ -932,13 +929,6 @@ void boosted_model
         if (m5_cloud_code > conserv_cloud_code)
             conserv_cloud_code = m5_cloud_code;
 
-        avg_cloud_code = (m1_cloud_code + m2_cloud_code + m3_cloud_code +
-            m4_cloud_code + m5_cloud_code) / 5.0;
-        if (avg_cloud_code < 75.0)
-            boosted_cloud_code = 50;   /* not cloudy */
-        else
-            boosted_cloud_code = 100;  /* cloudy */
-
 
         /*** Conservative cloud mask model run without the variances ***/
         /* Initialize the cloud mask */
@@ -1734,17 +1724,8 @@ void boosted_model
         if (m5_lim_cloud_code > limited_cloud_code)
             limited_cloud_code = m5_lim_cloud_code;
 
-        /* Use the boosted, conservative, and limited cloud codes to determine
-           the revised cloud codes */
-        if (boosted_cloud_code == 50)
-            /* Original fmask identified cloud, but upon further inspection
-               it looks like it's not cloudy */
-            rev_cloud_mask[samp] = 0;
-        else
-            /* Original fmask identified cloud, and it appears to have been
-               correct */
-            rev_cloud_mask[samp] = 4;
-
+        /* Use the conservative and limited cloud codes to determine the
+           revised cloud codes */
         if (conserv_cloud_code == 50)
             /* Original fmask identified cloud, but upon further inspection
                it looks like it's not cloudy */
