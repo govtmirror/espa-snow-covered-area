@@ -48,6 +48,8 @@ void variance
     int SQR_WINDOW = (WINDOW * WINDOW); /* squared window size */
     float out_scale;    /* output scale factor to be applied to convert to
                            an integer for writing */
+    double diff;        /* difference between the current pixel and the
+                           average */
     double avg;         /* average/mean value of the window */
     double sum;         /* sum of values in the window */
     double var;         /* variance of values in the window */
@@ -116,7 +118,10 @@ void variance
             avg = sum / SQR_WINDOW;
             sum = 0.0;
             for (i = 0; i < SQR_WINDOW; i++)
-                sum += pow (unscaled_arr[i] - avg, 2);
+            {
+                diff = unscaled_arr[i] - avg;
+                sum += diff * diff;
+            }
 
             /* Assign the variance to the current pixel */
             var = sum / (SQR_WINDOW - 1);

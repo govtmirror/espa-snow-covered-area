@@ -704,9 +704,10 @@ int main (int argc, char *argv[])
         }
 
     /* Apply the erosion and dilation filters to the revised limited cloud
-       mask */
-    cvErode (cv_img, cv_img, NULL, 1);
-    cvDilate (cv_img, cv_img, NULL, 1);
+       mask.  Given there are more false clouds (speckles), let's use a
+       2-pass erosion followed by dilation. */
+    cvErode (cv_img, cv_img, NULL, 2);
+    cvDilate (cv_img, cv_img, NULL, 2);
 
     /* Loop through OpenCV image and put it back in the revised cloud mask
        for buffering */
