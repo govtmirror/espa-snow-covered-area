@@ -53,22 +53,25 @@ int main (int argc, char *argv[])
     int retval;                /* return status */
     int i;                     /* looping variable */
     int ib;                    /* looping variable for bands */
+    int pix;                   /* current pixel */
     int line, samp;            /* current line,samp to be processed */
     int nlines_proc;           /* number of lines to process at one time */
     int num_cm;                /* number of cloud mask products to be output */
-    int16 *ndvi=NULL;          /* NDVI values */
-    int16 *ndsi=NULL;          /* NDSI values */
+    float *ndvi=NULL;          /* NDVI values */
+    float *ndsi=NULL;          /* NDSI values */
     int16 *band_arr=NULL;      /* values for current reflectance band */
-    int16 *index_arr=NULL;     /* values for current index */
-    int32 *variance_arr=NULL;  /* variance values for current band/index */
-    int32 *b1_var=NULL;        /* band1 variance values */
-    int32 *b2_var=NULL;        /* band2 variance values */
-    int32 *b3_var=NULL;        /* band3 variance values */
-    int32 *b4_var=NULL;        /* band4 variance values */
-    int32 *b5_var=NULL;        /* band5 variance values */
-    int32 *b7_var=NULL;        /* band7 variance values */
-    int32 *ndvi_var=NULL;      /* NDVI variance values */
-    int32 *ndsi_var=NULL;      /* NDSI variance values */
+    float *flt_arr=NULL;       /* values for current reflectance band, as
+                                  floats*/
+    float *index_arr=NULL;     /* values for current index */
+    float *variance_arr=NULL;  /* variance values for current band/index */
+    float *b1_var=NULL;        /* band1 variance values */
+    float *b2_var=NULL;        /* band2 variance values */
+    float *b3_var=NULL;        /* band3 variance values */
+    float *b4_var=NULL;        /* band4 variance values */
+    float *b5_var=NULL;        /* band5 variance values */
+    float *b7_var=NULL;        /* band7 variance values */
+    float *ndvi_var=NULL;      /* NDVI variance values */
+    float *ndsi_var=NULL;      /* NDSI variance values */
     uint8 *rev_cm=NULL;        /* revised cloud mask */
     uint8 *rev_lim_cm=NULL;    /* revised cloud mask without variances */
     uint8 *buff_cm=NULL;       /* revised cloud mask with buffering */
@@ -136,7 +139,7 @@ int main (int argc, char *argv[])
     }
 
     /* Allocate memory for the NDVI and NDSI, holds PROC_NLINES */
-    ndvi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (int16));
+    ndvi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (float));
     if (ndvi == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDVI");
@@ -144,7 +147,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    ndsi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (int16));
+    ndsi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (float));
     if (ndsi == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDSI");
@@ -237,7 +240,7 @@ int main (int argc, char *argv[])
             ndvi);
 
         if (put_output_lines (cm_output, ndvi, CM_NDVI, line, nlines_proc,
-            sizeof (int16)) != SUCCESS)
+            sizeof (float)) != SUCCESS)
         {
             sprintf (errmsg, "Writing output NDVI data for line %d", line);
             error_handler (true, FUNC_NAME, errmsg);
@@ -252,7 +255,7 @@ int main (int argc, char *argv[])
             ndsi);
 
         if (put_output_lines (cm_output, ndsi, CM_NDSI, line, nlines_proc,
-            sizeof (int16)) != SUCCESS)
+            sizeof (float)) != SUCCESS)
         {
             sprintf (errmsg, "Writing output NDSI data for line %d", line);
             error_handler (true, FUNC_NAME, errmsg);
@@ -270,7 +273,7 @@ int main (int argc, char *argv[])
 
     /* Allocate memory for the variance array, whole band */
     variance_arr = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (int32));
+        sizeof (float));
     if (variance_arr == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the variance array");
@@ -285,6 +288,17 @@ int main (int argc, char *argv[])
     if (band_arr == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band array");
+        error_handler (true, FUNC_NAME, errmsg);
+        exit (ERROR);
+    }
+
+    /* Allocate memory for the float array to hold the entire reflectance band
+       vs just a subset of lines, whole band */
+    flt_arr = calloc (refl_input->nlines * refl_input->nsamps, sizeof (float));
+    if (flt_arr == NULL)
+    {
+        sprintf (errmsg, "Error allocating memory for the floating point band "
+            "array");
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
     }
@@ -310,15 +324,17 @@ int main (int argc, char *argv[])
             exit (ERROR);
         }
 
-        /* Compute the variance.  Don't unscale the reflectance values or
-           rescale them, as the rule-based models are expecting these
-           varaiances to be computed on the scaled reflectances. */
-        variance (band_arr, 1.0, refl_input->refl_fill, refl_input->nlines,
+        /* Convert band_arr to float for the variance calculation */
+        for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
+            flt_arr[pix] = (float) band_arr[pix];
+
+        /* Compute the variance */
+        variance (flt_arr, refl_input->refl_fill, refl_input->nlines,
             refl_input->nsamps, variance_arr);
 
         /* Write variance to the output file */
         if (put_output_lines (cm_output, variance_arr, ib+VARIANCE_B1, 0,
-            refl_input->nlines, sizeof (int32)) != SUCCESS)
+            refl_input->nlines, sizeof (float)) != SUCCESS)
         {
             sprintf (errmsg, "Error writing variance for band %d of "
                 "reflectance file", ib);
@@ -327,12 +343,13 @@ int main (int argc, char *argv[])
         }
     }  /* end for ib */
 
-    /* Free the band array */
+    /* Free the band arrays */
     free (band_arr);
+    free (flt_arr);
 
     /* Allocate memory for the index array, whole band */
     index_arr = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (int16));
+        sizeof (float));
     if (index_arr == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the index array");
@@ -349,21 +366,20 @@ int main (int argc, char *argv[])
         else if (verbose && ib == CM_NDSI)
             printf ("    - NDSI band\n");
         if (get_output_lines (cm_output, ib, 0, refl_input->nlines,
-            sizeof(int16), index_arr) != SUCCESS)
+            sizeof(float), index_arr) != SUCCESS)
         {
             sprintf (errmsg, "Error reading band %d of indices", ib);
             error_handler (true, FUNC_NAME, errmsg);
             exit (ERROR);
         }
 
-        /* Compute the variance.  The indices will need to be unscaled to
-           compute the variance and then rescaled to store as an int. */
-        variance (index_arr, SCALE_FACTOR, refl_input->refl_fill,
-            refl_input->nlines, refl_input->nsamps, variance_arr);
+        /* Compute the variance */
+        variance (index_arr, refl_input->refl_fill, refl_input->nlines,
+            refl_input->nsamps, variance_arr);
 
         /* Write variance to the output file */
         if (put_output_lines (cm_output, variance_arr, ib+VARIANCE_NDVI, 0,
-            refl_input->nlines, sizeof (int32)) != SUCCESS)
+            refl_input->nlines, sizeof (float)) != SUCCESS)
         {
             sprintf (errmsg, "Error writing variance for band %d of "
                 "reflectance file", ib);
@@ -381,7 +397,7 @@ int main (int argc, char *argv[])
         printf ("  Computing variance -- complete\n");
 
     /* Allocate memory for the NDVI and NDSI to hold one line of data */
-    ndvi = calloc (refl_input->nsamps, sizeof (int16));
+    ndvi = calloc (refl_input->nsamps, sizeof (float));
     if (ndvi == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDVI");
@@ -389,7 +405,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    ndsi = calloc (refl_input->nsamps, sizeof (int16));
+    ndsi = calloc (refl_input->nsamps, sizeof (float));
     if (ndsi == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDSI");
@@ -398,7 +414,7 @@ int main (int argc, char *argv[])
     }
 
     /* Allocate memory for the variances to hold one line of data */
-    ndvi_var = calloc (refl_input->nsamps, sizeof (int32));
+    ndvi_var = calloc (refl_input->nsamps, sizeof (float));
     if (ndvi_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDVI variance");
@@ -406,7 +422,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    ndsi_var = calloc (refl_input->nsamps, sizeof (int32));
+    ndsi_var = calloc (refl_input->nsamps, sizeof (float));
     if (ndsi_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the NDSI variance");
@@ -414,7 +430,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b1_var = calloc (refl_input->nsamps, sizeof (int32));
+    b1_var = calloc (refl_input->nsamps, sizeof (float));
     if (b1_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band1 variance");
@@ -422,7 +438,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b2_var = calloc (refl_input->nsamps, sizeof (int32));
+    b2_var = calloc (refl_input->nsamps, sizeof (float));
     if (b2_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band2 variance");
@@ -430,7 +446,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b3_var = calloc (refl_input->nsamps, sizeof (int32));
+    b3_var = calloc (refl_input->nsamps, sizeof (float));
     if (b3_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band3 variance");
@@ -438,7 +454,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b4_var = calloc (refl_input->nsamps, sizeof (int32));
+    b4_var = calloc (refl_input->nsamps, sizeof (float));
     if (b4_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band4 variance");
@@ -446,7 +462,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b5_var = calloc (refl_input->nsamps, sizeof (int32));
+    b5_var = calloc (refl_input->nsamps, sizeof (float));
     if (b5_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band5 variance");
@@ -454,7 +470,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    b7_var = calloc (refl_input->nsamps, sizeof (int32));
+    b7_var = calloc (refl_input->nsamps, sizeof (float));
     if (b7_var == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the band7 variance");
@@ -517,7 +533,7 @@ int main (int argc, char *argv[])
                 case CM_NDSI:
                     ptr = ndsi; break;
             }
-            if (get_output_lines (cm_output, ib, line, 1, sizeof(int16), ptr)
+            if (get_output_lines (cm_output, ib, line, 1, sizeof(float), ptr)
                 != SUCCESS)
             {
                 sprintf (errmsg, "Error reading band %d of indices", ib);
@@ -549,7 +565,7 @@ int main (int argc, char *argv[])
                 case VARIANCE_NDSI:
                     ptr = ndsi_var; break;
             }
-            if (get_output_lines (cm_output, ib, line, 1, sizeof(int32), ptr)
+            if (get_output_lines (cm_output, ib, line, 1, sizeof(float), ptr)
                 != SUCCESS)
             {
                 sprintf (errmsg, "Error reading band %d of variances", ib);

@@ -16,6 +16,8 @@ HISTORY:
 Date          Programmer       Reason
 ---------     ---------------  -------------------------------------
 5/19/2014     Gail Schmidt     Original Development
+6/17/2014     Gail Schmidt     Don't handle the saturated values as special
+                               cases
 
 NOTES:
   1. Input and output arrays are 1D arrays of size nlines * nsamps.
@@ -35,7 +37,7 @@ void make_index
     int satu_value,       /* I: saturation value for the reflectance values */
     int nlines,           /* I: number of lines in the data arrays */
     int nsamps,           /* I: number of samples in the data arrays */
-    int16 *spec_indx      /* O: output spectral index */
+    float *spec_indx      /* O: output spectral index */
 )
 {
     int pix;                /* current pixel being processed */
@@ -47,9 +49,7 @@ void make_index
         /* If the current pixel is saturated in either band then the output
            is saturated.  Ditto for fill. */
         if (band1[pix] == fill_value || band2[pix] == fill_value)
-            spec_indx[pix] = FILL_VALUE;
-        else if (band1[pix] == satu_value || band2[pix] == satu_value)
-            spec_indx[pix] = SATURATE_VALUE;
+            spec_indx[pix] = (float) FILL_VALUE;
         else
         {
             /* Compute the band ratio */
@@ -61,12 +61,7 @@ void make_index
                 ratio = 1.0;
             else if (ratio < -1.0)
                 ratio = -1.0;
-
-            /* Scale to an int16 */
-            if (ratio >= 0.0)
-                spec_indx[pix] = (int16) (ratio * FLOAT_TO_INT + 0.5);
-            else
-                spec_indx[pix] = (int16) (ratio * FLOAT_TO_INT - 0.5);
+            spec_indx[pix] = ratio;
         }
     }
 }

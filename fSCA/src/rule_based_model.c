@@ -35,15 +35,15 @@ void rule_based_model
     Input_t *input_img,     /* I: pointer to input data structure containing
                                   the scaled reflectance and cloud mask
                                   buffers (reflectance bands are scaled) */
-    int16 *ndsi_arr,        /* I: NDSI scaled values (scaled) */
-    int16 *ndvi_arr,        /* I: NDVI scaled values (scaled) */
-    int32 *b1_var_arr,      /* I: band1 variance values */
-    int32 *b2_var_arr,      /* I: band2 variance values */
-    int32 *b4_var_arr,      /* I: band4 variance values */
-    int32 *b5_var_arr,      /* I: band5 variance values */
-    int32 *b7_var_arr,      /* I: band7 variance values */
-    int32 *ndvi_var_arr,    /* I: NDVI variance values (scaled) */
-    int32 *ndsi_var_arr,    /* I: NDSI variance values (scaled) */
+    float *ndsi_arr,        /* I: NDSI scaled values */
+    float *ndvi_arr,        /* I: NDVI scaled values */
+    float *b1_var_arr,      /* I: band1 variance values */
+    float *b2_var_arr,      /* I: band2 variance values */
+    float *b4_var_arr,      /* I: band4 variance values */
+    float *b5_var_arr,      /* I: band5 variance values */
+    float *b7_var_arr,      /* I: band7 variance values */
+    float *ndvi_var_arr,    /* I: NDVI variance values */
+    float *ndsi_var_arr,    /* I: NDSI variance values */
     int nsamps,             /* I: number of samples in the input arrays */
     uint8 *rev_cloud_mask,      /* O: revised cloud mask */
     uint8 *rev_lim_cloud_mask   /* O: revised cloud mask without variances */
@@ -65,7 +65,7 @@ void rule_based_model
     int16 limited_cloud_code; /* maximum of the model runs for the
                                  limited (non-variance) cloud code */
     int16 b1, b2, b3, b4, b5, b7;  /* pixel values for the reflectance bands */
-    int32 b1_var, b2_var, b4_var, b5_var, b7_var; /* variances for the
+    double b1_var, b2_var, b4_var, b5_var, b7_var; /* variances for the
                                       reflectance bands */
     double ndvi, ndsi;    /* pixel values for the NDVI and NDSI bands */
     double ndvi_var, ndsi_var;  /* pixel values for NDVI and NDSI variances */
@@ -105,10 +105,10 @@ void rule_based_model
         b4_var = b4_var_arr[samp];
         b5_var = b5_var_arr[samp];
         b7_var = b7_var_arr[samp];
-        ndvi = ndvi_arr[samp] * SCALE_FACTOR;
-        ndsi = ndsi_arr[samp] * SCALE_FACTOR;
-        ndvi_var = ndvi_var_arr[samp] * SCALE_FACTOR;
-        ndsi_var = ndsi_var_arr[samp] * SCALE_FACTOR;
+        ndvi = ndvi_arr[samp];
+        ndsi = ndsi_arr[samp];
+        ndvi_var = ndvi_var_arr[samp];
+        ndsi_var = ndsi_var_arr[samp];
         
         /*** Conservative cloud mask model run using the variances ***/
         /* 1st model run */

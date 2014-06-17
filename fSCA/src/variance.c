@@ -23,15 +23,12 @@ NOTES:
 ******************************************************************************/
 void variance
 (
-    int16 *array,       /* I: input array of data for which to compute the
+    float *array,       /* I: input array of data for which to compute the
                               covariances */
-    float scale_factor, /* I: scale factor for the input data */
     int fill_value,     /* I: fill value for the band */
     int nlines,         /* I: number of lines in the data arrays */
     int nsamps,         /* I: number of samples in the data arrays */
-    int32 *variance     /* O: output variance array; if the scale_factor is 1.0
-                              then the outputs are not scaled, otherwise these
-                              are scaled values */
+    float *variance     /* O: output variance array */
 )
 {
     bool skip_window;   /* should the current window be skipped due to fill */
@@ -46,27 +43,17 @@ void variance
     int WINDOW = 9;     /* variance window 9x9 around the center pixel */
     int HALF_WINDOW = (int) (WINDOW / 2); /* half window size */
     int SQR_WINDOW = (WINDOW * WINDOW); /* squared window size */
-    float out_scale;    /* output scale factor to be applied to convert to
-                           an integer for writing */
     double diff;        /* difference between the current pixel and the
                            average */
     double avg;         /* average/mean value of the window */
     double sum;         /* sum of values in the window */
     double var;         /* variance of values in the window */
     double unscaled_arr[SQR_WINDOW];  /* array of unscaled values */
-    double epsilon = 0.00001;  /* value for comparing the floating points */
 
     /* Fill the variance array will fill values by default, since any window
        with a fill pixel will not have a variance calculated */
     for (pix = 0; pix < nlines * nsamps; pix++)
         variance[pix] = fill_value;
-
-    /* If the input scale factor is 1.0 then don't apply an output scale
-       to convert to an integer */
-    if (fabs (scale_factor - 1.0) < epsilon)
-        out_scale = 1.0;
-    else
-        out_scale = FLOAT_TO_INT;
 
     /* Loop through the lines and samples in the array and compute the
        variance.  Start at the HALF_WINDOW location, as no variance values
@@ -97,7 +84,7 @@ void variance
                     }
                     else
                     {
-                        unscaled_arr[count] = array[win_pix] * scale_factor;
+                        unscaled_arr[count] = array[win_pix];
                         sum += unscaled_arr[count];
                     }
                 }  /* for samp_window */
@@ -125,12 +112,7 @@ void variance
 
             /* Assign the variance to the current pixel */
             var = sum / (SQR_WINDOW - 1);
-
-            /* Scale to an int32 */
-            if (var >= 0.0)
-                variance[pix] = (int32) (var * out_scale + 0.5);
-            else
-                variance[pix] = (int32) (var * out_scale - 0.5);
+            variance[pix] = (float) var;
         }  /* for samp */
     }  /* for line */
 }

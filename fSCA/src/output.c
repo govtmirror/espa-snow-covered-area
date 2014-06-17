@@ -195,23 +195,18 @@ Output_t *open_output
         }
         else if (ib >= VARIANCE_B1 && ib <= VARIANCE_B7)
         {
-            /* no scale factor for the reflectance band variances */
-            bmeta[ib].data_type = ESPA_INT32;
+            bmeta[ib].data_type = ESPA_FLOAT32;
             bmeta[ib].fill_value = FILL_VALUE;
         }
         else if (ib == VARIANCE_NDVI || ib == VARIANCE_NDSI)
         {
-            /* applied scale factor for the index variances */
-            bmeta[ib].data_type = ESPA_INT32;
+            bmeta[ib].data_type = ESPA_FLOAT32;
             bmeta[ib].fill_value = FILL_VALUE;
-            bmeta[ib].scale_factor = SCALE_FACTOR;
         }
         else if (ib == CM_NDVI || ib == CM_NDSI)
         {
-            /* applied scale factor for the indices */
-            bmeta[ib].data_type = ESPA_INT16;
+            bmeta[ib].data_type = ESPA_FLOAT32;
             bmeta[ib].fill_value = FILL_VALUE;
-            bmeta[ib].scale_factor = SCALE_FACTOR;
         }
 
         /* Set up the filename with the scene name and band name and open the
