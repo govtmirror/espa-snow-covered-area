@@ -13,7 +13,6 @@ Value      Description
 -----      -----------
 NULL       Error occurred opening or reading the file
 non-NULL   Successful completion
- 
 
 PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
 at the USGS EROS
