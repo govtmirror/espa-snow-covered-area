@@ -22,6 +22,8 @@ Date         Programmer       Reason
 ---------    ---------------  -------------------------------------
 5/19/2014    Gail Schmidt     Original Development (based on input routines
                               from the spectral indices application)
+6/9/2015     Gail Schmidt     Updated the cfmask band name to 'cfmask' since
+                              it had changed in ESPA a while ago
 
 NOTES:
   1. This routine opens the input reflectance files.  It also allocates memory
@@ -119,7 +121,7 @@ Input_t *open_input
             else if (!strcmp (metadata->band[ib].name, "toa_band7") &&
                 !strcmp (metadata->band[ib].product, "toa_refl"))
                 this->file_name[5] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "fmask") &&
+            else if (!strcmp (metadata->band[ib].name, "cfmask") &&
                 !strcmp (metadata->band[ib].product, "cfmask"))
                 this->cfmask_file_name = strdup (metadata->band[ib].file_name);
         }  /* for ib */
@@ -150,7 +152,7 @@ Input_t *open_input
             else if (!strcmp (metadata->band[ib].name, "sr_band7") &&
                 !strcmp (metadata->band[ib].product, "sr_refl"))
                 this->file_name[5] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "fmask") &&
+            else if (!strcmp (metadata->band[ib].name, "cfmask") &&
                 !strcmp (metadata->band[ib].product, "cfmask"))
                 this->cfmask_file_name = strdup (metadata->band[ib].file_name);
         }  /* for ib */
