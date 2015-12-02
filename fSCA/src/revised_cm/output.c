@@ -177,10 +177,10 @@ Output_t *open_output
             bmeta[ib].data_type = ESPA_UINT8;
             bmeta[ib].fill_value = CFMASK_FILL_VALUE;
             bmeta[ib].valid_range[0] = 0;
-            bmeta[ib].valid_range[1] = 4;
+            bmeta[ib].valid_range[1] = 3;
 
             /* Set up class values information */
-            if (allocate_class_metadata (&bmeta[ib], 2) != SUCCESS)
+            if (allocate_class_metadata (&bmeta[ib], 3) != SUCCESS)
             {
                 sprintf (errmsg, "Allocating cfmask classes.");
                 error_handler (true, FUNC_NAME, errmsg);
@@ -189,9 +189,11 @@ Output_t *open_output
           
             /* Identify the class values for the mask */
             bmeta[ib].class_values[0].class = 0;
-            bmeta[ib].class_values[1].class = 4;
+            bmeta[ib].class_values[2].class = 1;
+            bmeta[ib].class_values[3].class = 2;
             strcpy (bmeta[ib].class_values[0].description, "clear");
-            strcpy (bmeta[ib].class_values[1].description, "cloud");
+            strcpy (bmeta[ib].class_values[1].description, "cloud in cfmask");
+            strcpy (bmeta[ib].class_values[2].description, "cloud");
         }
         else if (ib >= VARIANCE_B1 && ib <= VARIANCE_B7)
         {

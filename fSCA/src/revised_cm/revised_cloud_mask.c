@@ -24,6 +24,8 @@ Date          Programmer       Reason
 ----------    ---------------  -------------------------------------
 5/19/2014     Gail Schmidt     Original Development, based on an algorithm
                                provided by David Selkowitz
+12/2/2015     Gail Schmidt     Mark any clear pixels that are flagged as cloud
+                               in cfmask as possibly cloudy
 
 NOTES:
   1. The rule-based models expect that the variances for the TOA reflectance
@@ -357,7 +359,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* index bands */
+    /* Index bands */
     for (ib = CM_NDVI; ib <= CM_NDSI; ib++)
     {
         /* Read the index band from the output file */
@@ -517,7 +519,7 @@ int main (int argc, char *argv[])
         /* Read the cfmask */
         if (get_input_cfmask_lines (refl_input, line, 1, NULL) != SUCCESS)
         {
-            sprintf (errmsg, "Error reading reflectance band %d", ib);
+            sprintf (errmsg, "Error reading cfmask band");
             error_handler (true, FUNC_NAME, errmsg);
             exit (ERROR);
         }
@@ -601,6 +603,10 @@ int main (int argc, char *argv[])
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Rule-based models -- complete\n");
+
+    /* Close the reflectance product */
+    close_input (refl_input);
+    free_input (refl_input);
 
     /* Free the index and variance pointers */
     free (ndvi);
@@ -746,6 +752,23 @@ int main (int argc, char *argv[])
     if (verbose)
         printf ("  Buffering the revised cloud mask\n");
 
+    /* Reopen the cfmask */
+    if (!reopen_cfmask (refl_input))
+    {
+        sprintf (errmsg, "Error reopening the cfmask");
+        error_handler (true, FUNC_NAME, errmsg);
+        exit (ERROR);
+    }
+
+    /* Read the cfmask for the entire image */
+    if (get_input_cfmask_lines (refl_input, 0, refl_input->nlines, NULL) !=
+        SUCCESS)
+    {
+        sprintf (errmsg, "Error reading cfmask band");
+        error_handler (true, FUNC_NAME, errmsg);
+        exit (ERROR);
+    }
+
     /* Allocate memory for the buffered cloud mask */
     buff_cm = calloc (refl_input->nlines * refl_input->nsamps, sizeof (uint8));
     if (buff_cm == NULL)
@@ -762,6 +785,15 @@ int main (int argc, char *argv[])
         sprintf (errmsg, "Buffering revised cloud mask band");
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
+    }
+
+    /* Loop through the pixels and mark the clear pixels that are flagged as
+       cloud in cfmask as possible cloud pixels */
+    for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
+    {
+        if (buff_cm[pix] == OUT_NOCLOUD &&
+            refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
+            buff_cm[pix] = OUT_POSS_CLOUD;
     }
 
     /* Write the revised buffered cloud mask */
@@ -787,6 +819,15 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
+    /* Loop through the pixels and mark the clear pixels that are flagged as
+       cloud in cfmask as possible cloud pixels */
+    for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
+    {
+        if (buff_cm[pix] == OUT_NOCLOUD &&
+            refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
+            buff_cm[pix] = OUT_POSS_CLOUD;
+    }
+
     /* Write the revised buffered cloud mask */
     if (put_output_lines (cm_output, buff_cm, REVISED_LIM_CM, 0,
         cm_output->nlines, sizeof (uint8)) != SUCCESS)
@@ -805,9 +846,11 @@ int main (int argc, char *argv[])
     free (rev_lim_cm);
     free (buff_cm);
 
-    /* Close the reflectance product */
-    close_input (refl_input);
-    free_input (refl_input);
+    /* Close and free the cfmask pointers and buffers, then free the input
+       product */
+    close_cfmask (refl_input);
+    free_cfmask (refl_input);
+    free (refl_input);
 
     /* Write the ENVI header for spectral indices files */
     for (ib = 0; ib < cm_output->nband; ib++)

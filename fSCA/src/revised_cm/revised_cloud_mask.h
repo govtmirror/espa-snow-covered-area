@@ -15,6 +15,13 @@
 #include "envi_header.h"
 #include "error_handler.h"
 
+/* Defines for cloud mask and revised cloud mask */
+#define CFMASK_CLOUD 4        /* cloud value in input cfmask */
+#define OUT_NOCLOUD 0         /* pixel is not cloud (clear) */
+#define OUT_POSS_CLOUD 1      /* pixel was cloud in input cfmask (possibly
+                                 cloud) */
+#define OUT_CLOUD 2           /* pixel is cloud in revised cfmask (cloud) */
+
 /* Prototypes */
 void usage ();
 

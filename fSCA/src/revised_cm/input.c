@@ -330,17 +330,14 @@ void free_input
             error_handler (false, FUNC_NAME, errmsg);
         }
   
-        /* Free image band pointers */
+        /* Free image band pointers.  (Keep cfmask filename since it will get
+           used later.) */
         for (ib = 0; ib < this->nrefl_band; ib++)
             free (this->file_name[ib]);
-        free (this->cfmask_file_name);
   
         /* Free the data buffers */
         free (this->refl_buf[0]);
         free (this->cfmask_buf);
-
-        /* Free the data structure */
-        free (this);
     } /* end if */
 }
 
@@ -531,5 +528,151 @@ int get_input_cfmask_lines
     }
   
     return (SUCCESS);
+}
+
+
+/******************************************************************************
+MODULE:  reopen_cfmask
+
+PURPOSE:  Sets up the existing input data structure for cfmask, reopens the
+cfmask file for read access, and reallocates space for the whole cfmask band.
+
+RETURN VALUE:
+Type = Input_t*
+Value      Description
+-----      -----------
+false      Error occurred reopening or reallocting cfmask
+true       Successful completion
+
+PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
+at the USGS EROS
+
+HISTORY:
+Date         Programmer       Reason
+---------    ---------------  -------------------------------------
+12/2/2015    Gail Schmidt     Original Development
+
+NOTES:
+  1. This routine opens the input cfmask file.  It also allocates memory for
+     the cfmask buffer in the input structure.  It is up to the caller to use
+     close_cfmask and free_cfmask to close the file and free up the memory when
+     done using the input data structure.
+******************************************************************************/
+bool reopen_cfmask
+(
+    Input_t *input_struct   /* I: existing input structure */
+)
+{
+    char FUNC_NAME[] = "reopen_cfmask";   /* function name */
+    char errmsg[STR_SIZE];    /* error message */
+
+    /* Initialize the input pointers */
+    input_struct->fp_cfmask = NULL;
+    input_struct->cfmask_buf = NULL;
+
+    /* Open the cfmask file */
+    input_struct->fp_cfmask = open_raw_binary (input_struct->cfmask_file_name,
+        "rb");
+    if (input_struct->fp_cfmask == NULL)
+    {
+        sprintf (errmsg, "Opening raw binary file: %s",
+            input_struct->cfmask_file_name);
+        error_handler (true, FUNC_NAME, errmsg);
+        return (false);
+    }
+    input_struct->refl_open = true;
+
+    /* Allocate input buffer for the entire image */
+    input_struct->cfmask_buf = calloc (
+        input_struct->nlines * input_struct->nsamps, sizeof (uint8));
+    if (input_struct->cfmask_buf == NULL)
+    {
+        close_cfmask (input_struct);
+        free_cfmask (input_struct);
+        sprintf (errmsg, "Allocating memory for input cfmask buffer "
+            "containing %d lines.", input_struct->nlines);
+        error_handler (true, FUNC_NAME, errmsg);
+        return (false);
+    }
+
+    /* Success */
+    return (true);
+}
+
+
+/******************************************************************************
+MODULE:  close_cfmask
+
+PURPOSE:  Ends SDS access and closes the cfmask file.
+
+RETURN VALUE:
+Type = None
+
+PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
+at the USGS EROS
+
+HISTORY:
+Date         Programmer       Reason
+---------    ---------------  -------------------------------------
+12/2/2015    Gail Schmidt     Original Development
+
+NOTES:
+******************************************************************************/
+void close_cfmask
+(
+    Input_t *this    /* I: pointer to input data structure */
+)
+{
+    /* Close the cfmask file */
+    if (this->refl_open)
+    {
+        close_raw_binary (this->fp_cfmask);
+        this->refl_open = false;
+    }
+}
+
+
+/******************************************************************************
+MODULE:  free_cfmask
+
+PURPOSE:  Frees memory in the input data structure for cfmask.
+
+RETURN VALUE:
+Type = None
+
+PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
+at the USGS EROS
+
+HISTORY:
+Date         Programmer       Reason
+---------    ---------------  -------------------------------------
+12/2/2015    Gail Schmidt     Original Development
+
+NOTES:
+******************************************************************************/
+void free_cfmask
+(
+    Input_t *this    /* I: pointer to input data structure */
+)
+{
+    char FUNC_NAME[] = "free_cfmask";  /* function name */
+    char errmsg[STR_SIZE];             /* error message */
+
+    if (this != NULL)
+    {
+        if (this->refl_open) 
+        {
+            strcpy (errmsg, "Freeing input data structure, but reflectance "
+                "file is still open. Use close_input or close_cfmask to close "
+                "the file");
+            error_handler (false, FUNC_NAME, errmsg);
+        }
+  
+        /* Free filename pointer */
+        free (this->cfmask_file_name);
+  
+        /* Free the data buffer */
+        free (this->cfmask_buf);
+    } /* end if */
 }
 

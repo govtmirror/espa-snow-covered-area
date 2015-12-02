@@ -20,6 +20,7 @@ HISTORY:
 Date          Programmer       Reason
 ---------     ---------------  -------------------------------------
 5/21/2014     Gail Schmidt     Original Development
+12/2/2015     Gail Schmidt     Modified the output value for the cloud mask
 
 NOTES:
   1. Input and output arrays are 1D arrays of size NPROC_LINES * nsamps.
@@ -70,7 +71,7 @@ void rule_based_model
     double ndvi, ndsi;    /* pixel values for the NDVI and NDSI bands */
     double ndvi_var, ndsi_var;  /* pixel values for NDVI and NDSI variances */
 
-    /* Initialize the revised cloud mask to all zeros */
+    /* Initialize the revised cloud mask to all zeros (no cloud) */
     memset (rev_cloud_mask, 0, nsamps * sizeof (uint8));
     memset (rev_lim_cloud_mask, 0, nsamps * sizeof (uint8));
 
@@ -81,7 +82,7 @@ void rule_based_model
     {
         /* If this isn't a cloudy pixel in the cfmask then skip to the next
            pixel */
-        if (input_img->cfmask_buf[samp] != 4)
+        if (input_img->cfmask_buf[samp] != CFMASK_CLOUD)
             continue;
 
         /* Initialize the cloud mask */
@@ -1733,7 +1734,7 @@ void rule_based_model
         else
             /* Original fmask identified cloud, and it appears to have been
                correct */
-            rev_cloud_mask[samp] = 4;
+            rev_cloud_mask[samp] = OUT_CLOUD;
 
         if (limited_cloud_code == 50)
             /* Original fmask identified cloud, but upon further inspection it
@@ -1742,7 +1743,7 @@ void rule_based_model
         else
             /* Original fmask identified cloud, and it appears to have been
                correct */
-            rev_lim_cloud_mask[samp] = 4;
+            rev_lim_cloud_mask[samp] = OUT_CLOUD;
     }  /* for samp */
 }
 

@@ -73,4 +73,19 @@ int get_input_cfmask_lines
     int16 *out_arr   /* O: output array to populate, if not NULL */
 );
 
+bool reopen_cfmask
+(
+    Input_t *input_struct   /* I: existing input structure */
+);
+
+void close_cfmask
+(
+    Input_t *this    /* I: pointer to input data structure */
+);
+
+void free_cfmask
+(
+    Input_t *this    /* I: pointer to input data structure */
+);
+
 #endif
