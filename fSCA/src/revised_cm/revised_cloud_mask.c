@@ -26,14 +26,13 @@ Date          Programmer       Reason
                                provided by David Selkowitz
 12/2/2015     Gail Schmidt     Mark any clear pixels that are flagged as cloud
                                in cfmask as possibly cloudy
+12/2/2015     Gail Schmidt     Removed the mask computed using the variances
+                               and stick to the better mask without variances
+12/2/2015     Gail Schmidt     Commented out the buffer around the
+                               erosion/dilation results because it seems to
+                               better represent the clouds without it
 
 NOTES:
-  1. The rule-based models expect that the variances for the TOA reflectance
-     bands were calculated using scaled values straight from the TOA bands.
-     Thus the scale-factor was not applied to unscale these values.  The
-     models also expect the variances for the NDVI and NDSI values to be 
-     computed on the original values between -1.0 and 1.0.  Thus these values
-     need to be unscaled after being written to the output file as scaled.
 ******************************************************************************/
 int main (int argc, char *argv[])
 {
@@ -53,32 +52,15 @@ int main (int argc, char *argv[])
     char *xml_infile=NULL;     /* input XML filename */
     char *cptr=NULL;           /* pointer to the file extension */
     int retval;                /* return status */
-    int i;                     /* looping variable */
     int ib;                    /* looping variable for bands */
     int pix;                   /* current pixel */
     int line, samp;            /* current line,samp to be processed */
-    int nlines_proc;           /* number of lines to process at one time */
     int num_cm;                /* number of cloud mask products to be output */
-    float *ndvi=NULL;          /* NDVI values */
-    float *ndsi=NULL;          /* NDSI values */
-    int16 *band_arr=NULL;      /* values for current reflectance band */
-    float *flt_arr=NULL;       /* values for current reflectance band, as
-                                  floats*/
-    float *index_arr=NULL;     /* values for current index */
-    float *variance_arr=NULL;  /* variance values for current band/index */
-    float *b1_var=NULL;        /* band1 variance values */
-    float *b2_var=NULL;        /* band2 variance values */
-    float *b3_var=NULL;        /* band3 variance values */
-    float *b4_var=NULL;        /* band4 variance values */
-    float *b5_var=NULL;        /* band5 variance values */
-    float *b7_var=NULL;        /* band7 variance values */
-    float *ndvi_var=NULL;      /* NDVI variance values */
-    float *ndsi_var=NULL;      /* NDSI variance values */
     uint8 *rev_cm=NULL;        /* revised cloud mask */
-    uint8 *rev_lim_cm=NULL;    /* revised cloud mask without variances */
+#ifdef BUFFER
     uint8 *buff_cm=NULL;       /* revised cloud mask with buffering */
+#endif
     uint8 *opencv_img=NULL;    /* pointer to the opencv image data */
-    void *ptr=NULL;            /* generic pointer for reading data */
     Input_t *refl_input=NULL;  /* input structure for the TOA product */
     Output_t *cm_output=NULL;  /* output structure and metadata for the new
                                   cloud mask products */
@@ -140,59 +122,11 @@ int main (int argc, char *argv[])
         printf ("  Saturation value: %d\n", refl_input->refl_saturate_val);
     }
 
-    /* Allocate memory for the NDVI and NDSI, holds PROC_NLINES */
-    ndvi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (float));
-    if (ndvi == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDVI");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    ndsi = calloc (PROC_NLINES*refl_input->nsamps, sizeof (float));
-    if (ndsi == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDSI");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Set up the output information for the NDVI and NDSI */
+    /* Set up the output information for the output cloud mask */
     num_cm = NUM_CM;
-    strcpy (short_cm_names[CM_NDVI], "ndvi");
-    strcpy (long_cm_names[CM_NDVI], "normalized difference vegetation index");
-    strcpy (cm_data_units[CM_NDVI], "band ratio index value");
-
-    strcpy (short_cm_names[CM_NDSI], "ndsi");
-    strcpy (long_cm_names[CM_NDSI], "normalized difference snow index");
-    strcpy (cm_data_units[CM_NDSI], "band ratio index value");
-
-    for (i = VARIANCE_B1; i <= VARIANCE_B5; i++)
-    {
-        sprintf (short_cm_names[i], "varb%d", i-VARIANCE_B1+1);
-        sprintf (long_cm_names[i], "variance for band %d", i-VARIANCE_B1+1);
-        strcpy (cm_data_units[i], "squared deviation from mean");
-    }
-
-    strcpy (short_cm_names[VARIANCE_B7], "varb7");
-    strcpy (long_cm_names[VARIANCE_B7], "variance for band 7");
-    strcpy (cm_data_units[VARIANCE_B7], "squared deviation from mean");
-
-    strcpy (short_cm_names[VARIANCE_NDVI], "varndvi");
-    strcpy (long_cm_names[VARIANCE_NDVI], "variance for NDVI");
-    strcpy (cm_data_units[VARIANCE_NDVI], "squared deviation from mean");
-
-    strcpy (short_cm_names[VARIANCE_NDSI], "varndsi");
-    strcpy (long_cm_names[VARIANCE_NDSI], "variance for NDSI");
-    strcpy (cm_data_units[VARIANCE_NDSI], "squared deviation from mean");
-
     strcpy (short_cm_names[REVISED_CM], "revcm");
     strcpy (long_cm_names[REVISED_CM], "revised cloud mask");
     strcpy (cm_data_units[REVISED_CM], "quality/feature classification");
-
-    strcpy (short_cm_names[REVISED_LIM_CM], "revlimcm");
-    strcpy (long_cm_names[REVISED_LIM_CM], "revised limited cloud mask");
-    strcpy (cm_data_units[REVISED_LIM_CM], "quality/feature classification");
 
     /* Open the specified output files and create the metadata structure */
     cm_output = open_output (&xml_metadata, refl_input, num_cm,
@@ -203,294 +137,9 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Print the processing status if verbose */
-    if (verbose)
-    {
-        printf ("  Processing spectral indices %d lines at a time\n",
-            PROC_NLINES);
-    }
-
-    /* Loop through the lines and samples in the reflectance product,
-       computing the NDVI and NDSI */
-    nlines_proc = PROC_NLINES;
-    for (line = 0; line < refl_input->nlines; line += PROC_NLINES)
-    {
-        /* Do we have nlines_proc left to process? */
-        if (line + nlines_proc >= refl_input->nlines)
-            nlines_proc = refl_input->nlines - line;
-
-        /* Read the current lines from the reflectance file for each of the
-           reflectance bands */
-        for (ib = 0; ib < refl_input->nrefl_band; ib++)
-        {
-            if (get_input_refl_lines (refl_input, ib, line, nlines_proc, NULL)
-                != SUCCESS)
-            {
-                sprintf (errmsg, "Error reading %d lines from band %d of the "
-                    "reflectance file starting at line %d", nlines_proc, ib,
-                    line);
-                error_handler (true, FUNC_NAME, errmsg);
-                exit (ERROR);
-            }
-        }  /* end for ib */
-
-        /* Compute the NDVI and write to output file
-           NDVI = (nir - red) / (nir + red) */
-        make_index (refl_input->refl_buf[3] /*b4*/,
-            refl_input->refl_buf[2] /*b3*/, refl_input->refl_fill,
-            refl_input->refl_saturate_val, nlines_proc, refl_input->nsamps,
-            ndvi);
-
-        if (put_output_lines (cm_output, ndvi, CM_NDVI, line, nlines_proc,
-            sizeof (float)) != SUCCESS)
-        {
-            sprintf (errmsg, "Writing output NDVI data for line %d", line);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-
-        /* Compute the NDSI and write to output file
-           NDSI = (green - mir) / (green + mir) */
-        make_index (refl_input->refl_buf[1] /*b2*/,
-            refl_input->refl_buf[4] /*b5*/, refl_input->refl_fill,
-            refl_input->refl_saturate_val, nlines_proc, refl_input->nsamps,
-            ndsi);
-
-        if (put_output_lines (cm_output, ndsi, CM_NDSI, line, nlines_proc,
-            sizeof (float)) != SUCCESS)
-        {
-            sprintf (errmsg, "Writing output NDSI data for line %d", line);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-    }  /* end for line */
-
-    /* Free the index pointers */
-    free (ndvi);
-    free (ndsi);
-
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Spectral indices -- complete\n");
-
-    /* Allocate memory for the variance array, whole band */
-    variance_arr = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (float));
-    if (variance_arr == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the variance array");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Allocate memory for the band array to read the entire reflectance band
-       vs just a subset of lines, whole band */
-    band_arr = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (int16));
-    if (band_arr == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band array");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Allocate memory for the float array to hold the entire reflectance band
-       vs just a subset of lines, whole band */
-    flt_arr = calloc (refl_input->nlines * refl_input->nsamps, sizeof (float));
-    if (flt_arr == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the floating point band "
-            "array");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Processing variance for reflectance bands and indices\n");
-
-    /* Compute the variance for each reflectance band, NDVI, and NDSI.  Write
-       these to the output.  Process the whole band or index at a time, one
-       at a time. */ 
-    /* reflectance bands */
-    for (ib = 0; ib < refl_input->nrefl_band; ib++)
-    {
-        /* Read the band */
-        if (verbose)
-            printf ("    - reflectance band %d\n", ib);
-        if (get_input_refl_lines (refl_input, ib, 0, refl_input->nlines,
-            band_arr) != SUCCESS)
-        {
-            sprintf (errmsg, "Error reading band %d of reflectance file", ib);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-
-        /* Convert band_arr to float for the variance calculation */
-        for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
-            flt_arr[pix] = (float) band_arr[pix];
-
-        /* Compute the variance */
-        variance (flt_arr, refl_input->refl_fill, refl_input->nlines,
-            refl_input->nsamps, variance_arr);
-
-        /* Write variance to the output file */
-        if (put_output_lines (cm_output, variance_arr, ib+VARIANCE_B1, 0,
-            refl_input->nlines, sizeof (float)) != SUCCESS)
-        {
-            sprintf (errmsg, "Error writing variance for band %d of "
-                "reflectance file", ib);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-    }  /* end for ib */
-
-    /* Free the band arrays */
-    free (band_arr);
-    free (flt_arr);
-
-    /* Allocate memory for the index array, whole band */
-    index_arr = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (float));
-    if (index_arr == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the index array");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Index bands */
-    for (ib = CM_NDVI; ib <= CM_NDSI; ib++)
-    {
-        /* Read the index band from the output file */
-        if (verbose && ib == CM_NDVI)
-            printf ("    - NDVI band\n");
-        else if (verbose && ib == CM_NDSI)
-            printf ("    - NDSI band\n");
-        if (get_output_lines (cm_output, ib, 0, refl_input->nlines,
-            sizeof(float), index_arr) != SUCCESS)
-        {
-            sprintf (errmsg, "Error reading band %d of indices", ib);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-
-        /* Compute the variance */
-        variance (index_arr, refl_input->refl_fill, refl_input->nlines,
-            refl_input->nsamps, variance_arr);
-
-        /* Write variance to the output file */
-        if (put_output_lines (cm_output, variance_arr, ib+VARIANCE_NDVI, 0,
-            refl_input->nlines, sizeof (float)) != SUCCESS)
-        {
-            sprintf (errmsg, "Error writing variance for band %d of "
-                "reflectance file", ib);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
-    }  /* end for ib */
-
-    /* Free the index and variance arrays */
-    free (variance_arr);
-    free (index_arr);
-
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Computing variance -- complete\n");
-
-    /* Allocate memory for the NDVI and NDSI to hold one line of data */
-    ndvi = calloc (refl_input->nsamps, sizeof (float));
-    if (ndvi == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDVI");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    ndsi = calloc (refl_input->nsamps, sizeof (float));
-    if (ndsi == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDSI");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Allocate memory for the variances to hold one line of data */
-    ndvi_var = calloc (refl_input->nsamps, sizeof (float));
-    if (ndvi_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDVI variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    ndsi_var = calloc (refl_input->nsamps, sizeof (float));
-    if (ndsi_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the NDSI variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b1_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b1_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band1 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b2_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b2_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band2 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b3_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b3_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band3 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b4_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b4_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band4 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b5_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b5_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band5 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    b7_var = calloc (refl_input->nsamps, sizeof (float));
-    if (b7_var == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the band7 variance");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
     /* Allocate memory for the revised cfmask arrays, for one line */
     rev_cm = calloc (refl_input->nsamps, sizeof (uint8));
     if (rev_cm == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the revised cloud mask");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    rev_lim_cm = calloc (refl_input->nsamps, sizeof (uint8));
-    if (rev_lim_cm == NULL)
     {
         sprintf (errmsg, "Error allocating memory for the revised cloud mask");
         error_handler (true, FUNC_NAME, errmsg);
@@ -524,64 +173,10 @@ int main (int argc, char *argv[])
             exit (ERROR);
         }
 
-        /* Read the index bands */
-        for (ib = CM_NDVI; ib <= CM_NDSI; ib++)
-        {
-            /* Read the index band from the output file */
-            switch (ib)
-            {
-                case CM_NDVI:
-                    ptr = ndvi; break;
-                case CM_NDSI:
-                    ptr = ndsi; break;
-            }
-            if (get_output_lines (cm_output, ib, line, 1, sizeof(float), ptr)
-                != SUCCESS)
-            {
-                sprintf (errmsg, "Error reading band %d of indices", ib);
-                error_handler (true, FUNC_NAME, errmsg);
-                exit (ERROR);
-            }
-        }
+        /* Run the rule-based model for the revised cloud mask */
+        rule_based_model (refl_input, refl_input->nsamps, rev_cm);
 
-        /* Read the variance bands */
-        for (ib = VARIANCE_B1; ib <= VARIANCE_NDSI; ib++)
-        {
-            /* Read the index or variance band from the output file */
-            switch (ib)
-            {
-                case VARIANCE_B1:
-                    ptr = b1_var; break;
-                case VARIANCE_B2:
-                    ptr = b2_var; break;
-                case VARIANCE_B3:
-                    ptr = b3_var; break;
-                case VARIANCE_B4:
-                    ptr = b4_var; break;
-                case VARIANCE_B5:
-                    ptr = b5_var; break;
-                case VARIANCE_B7:
-                    ptr = b7_var; break;
-                case VARIANCE_NDVI:
-                    ptr = ndvi_var; break;
-                case VARIANCE_NDSI:
-                    ptr = ndsi_var; break;
-            }
-            if (get_output_lines (cm_output, ib, line, 1, sizeof(float), ptr)
-                != SUCCESS)
-            {
-                sprintf (errmsg, "Error reading band %d of variances", ib);
-                error_handler (true, FUNC_NAME, errmsg);
-                exit (ERROR);
-            }
-        }
-
-        /* Run the rule-based models on all the input data */
-        rule_based_model (refl_input, ndsi, ndvi, b1_var, b2_var, b4_var,
-            b5_var, b7_var, ndvi_var, ndsi_var, refl_input->nsamps, rev_cm,
-            rev_lim_cm);
-
-        /* Write the revised cloud masks */
+        /* Write the revised cloud mask */
         if (put_output_lines (cm_output, rev_cm, REVISED_CM, line, 1,
             sizeof (uint8)) != SUCCESS)
         {
@@ -589,38 +184,18 @@ int main (int argc, char *argv[])
             error_handler (true, FUNC_NAME, errmsg);
             exit (ERROR);
         }
-
-        if (put_output_lines (cm_output, rev_lim_cm, REVISED_LIM_CM, line, 1,
-            sizeof (uint8)) != SUCCESS)
-        {
-            sprintf (errmsg, "Writing revised limited cloud mask for line %d",
-                line);
-            error_handler (true, FUNC_NAME, errmsg);
-            exit (ERROR);
-        }
     }  /* end for line */
 
     /* Print the processing status if verbose */
     if (verbose)
-        printf ("  Rule-based models -- complete\n");
+        printf ("  Rule-based model -- complete\n");
 
     /* Close the reflectance product */
     close_input (refl_input);
     free_input (refl_input);
 
-    /* Free the index and variance pointers */
-    free (ndvi);
-    free (ndsi);
-    free (b1_var);
-    free (b2_var);
-    free (b3_var);
-    free (b4_var);
-    free (b5_var);
-    free (b7_var);
-    free (ndvi_var);
-    free (ndsi_var);
+    /* Free the cloud mask pointer */
     free (rev_cm);
-    free (rev_lim_cm);
 
     /* Print the processing status if verbose */
     if (verbose)
@@ -657,17 +232,6 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Allocate memory for the limited revised cloud mask */
-    rev_lim_cm = calloc (refl_input->nlines * refl_input->nsamps,
-        sizeof (uint8));
-    if (rev_lim_cm == NULL)
-    {
-        sprintf (errmsg, "Error allocating memory for the limited revised "
-            "cloud mask");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
     /* Read the revised cloud mask */
     if (get_output_lines (cm_output, REVISED_CM, 0, cm_output->nlines,
         sizeof(uint8), rev_cm) != SUCCESS)
@@ -679,11 +243,13 @@ int main (int argc, char *argv[])
 
     /* Loop through the revised cloud mask and put it in the OpenCV image */
     for (line = 0; line < cm_output->nlines; line++)
+    {
         for (samp = 0; samp < cm_output->nsamps; samp++)
         {
             opencv_img[line*cv_img->widthStep + samp] =
                 rev_cm[line*cm_output->nsamps + samp];
         }
+    }
 
     /* Apply the erosion and dilation filters to the revised cloud mask */
     cvErode (cv_img, cv_img, element, 1);
@@ -692,65 +258,31 @@ int main (int argc, char *argv[])
     /* Loop through OpenCV image and put it back in the revised cloud mask */
     opencv_img = (uint8 *)cv_img->imageData;
     for (line = 0; line < cm_output->nlines; line++)
+    {
         for (samp = 0; samp < cm_output->nsamps; samp++)
         {
             rev_cm[line*cm_output->nsamps + samp] =
                 opencv_img[line*cv_img->widthStep + samp];
         }
+    }
+//FILE *my_fp;
+//my_fp = fopen ("gail2.img", "w");
+//fwrite (rev_cm, refl_input->nlines*refl_input->nsamps, sizeof(uint8), my_fp);
+//fclose (my_fp);
 
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Erosion and dilation -- complete\n");
-
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Running the erosion and dilation filters on the revised "
-            "limited cloud mask\n");
-
-    /* Read the limited cloud mask */
-    if (get_output_lines (cm_output, REVISED_LIM_CM, 0, cm_output->nlines,
-        sizeof(uint8), rev_lim_cm) != SUCCESS)
-    {
-        sprintf (errmsg, "Reading the revised limited cloud mask band");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Loop through the revised limited cloud mask and put it in the OpenCV
-       image */
-    for (line = 0; line < cm_output->nlines; line++)
-        for (samp = 0; samp < cm_output->nsamps; samp++)
-        {
-            opencv_img[line*cv_img->widthStep + samp] =
-                rev_lim_cm[line*cm_output->nsamps + samp];
-        }
-
-    /* Apply the erosion and dilation filters to the revised limited cloud
-       mask.  Given there are more false clouds (speckles), let's use a
-       2-pass erosion followed by dilation. */
-    cvErode (cv_img, cv_img, NULL, 2);
-    cvDilate (cv_img, cv_img, NULL, 2);
-
-    /* Loop through OpenCV image and put it back in the revised cloud mask
-       for buffering */
-    for (line = 0; line < cm_output->nlines; line++)
-        for (samp = 0; samp < cm_output->nsamps; samp++)
-        {
-            rev_lim_cm[line*cm_output->nsamps + samp] =
-                opencv_img[line*cv_img->widthStep + samp];
-        }
 
     /* Release the OpenCV image and structuring element */
     cvReleaseImage (&cv_img);
     cvReleaseStructuringElement (&element);
     
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Erosion and dilation -- complete\n");
-
+#ifdef BUFFER
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Buffering the revised cloud mask\n");
+#endif
 
     /* Reopen the cfmask */
     if (!reopen_cfmask (refl_input))
@@ -769,6 +301,7 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
+#ifdef BUFFER
     /* Allocate memory for the buffered cloud mask */
     buff_cm = calloc (refl_input->nlines * refl_input->nsamps, sizeof (uint8));
     if (buff_cm == NULL)
@@ -786,18 +319,19 @@ int main (int argc, char *argv[])
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
     }
+#endif
 
     /* Loop through the pixels and mark the clear pixels that are flagged as
        cloud in cfmask as possible cloud pixels */
     for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
     {
-        if (buff_cm[pix] == OUT_NOCLOUD &&
+        if (rev_cm[pix] == OUT_NOCLOUD &&
             refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
-            buff_cm[pix] = OUT_POSS_CLOUD;
+            rev_cm[pix] = OUT_POSS_CLOUD;
     }
 
     /* Write the revised buffered cloud mask */
-    if (put_output_lines (cm_output, buff_cm, REVISED_CM, 0, cm_output->nlines,
+    if (put_output_lines (cm_output, rev_cm, REVISED_CM, 0, cm_output->nlines,
         sizeof (uint8)) != SUCCESS)
     {
         sprintf (errmsg, "Writing revised cloud mask band");
@@ -805,46 +339,17 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Print the processing status if verbose */
-    if (verbose)
-        printf ("  Buffering the limited revised cloud mask\n");
-
-    /* Apply a 7 pixel buffer to all cloudy pixels in the limited revised
-       cloud mask */
-    if (buffer (rev_lim_cm, 6, cm_output->nlines, cm_output->nsamps, buff_cm) !=
-        SUCCESS)
-    {
-        sprintf (errmsg, "Buffering limited revised cloud mask band");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
-    /* Loop through the pixels and mark the clear pixels that are flagged as
-       cloud in cfmask as possible cloud pixels */
-    for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
-    {
-        if (buff_cm[pix] == OUT_NOCLOUD &&
-            refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
-            buff_cm[pix] = OUT_POSS_CLOUD;
-    }
-
-    /* Write the revised buffered cloud mask */
-    if (put_output_lines (cm_output, buff_cm, REVISED_LIM_CM, 0,
-        cm_output->nlines, sizeof (uint8)) != SUCCESS)
-    {
-        sprintf (errmsg, "Writing limited revised cloud mask band");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
-    }
-
+#ifdef BUFFER
     /* Print the processing status if verbose */
     if (verbose)
         printf ("  Cloud buffering -- complete\n");
+#endif
 
     /* Free the revised and buffered cloud masks */
     free (rev_cm);
-    free (rev_lim_cm);
+#ifdef BUFFER
     free (buff_cm);
+#endif
 
     /* Close and free the cfmask pointers and buffers, then free the input
        product */
@@ -852,7 +357,7 @@ int main (int argc, char *argv[])
     free_cfmask (refl_input);
     free (refl_input);
 
-    /* Write the ENVI header for spectral indices files */
+    /* Write the ENVI header for the cloud mask */
     for (ib = 0; ib < cm_output->nband; ib++)
     {
         /* Create the ENVI header file this band */

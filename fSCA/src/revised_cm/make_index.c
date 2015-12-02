@@ -7,7 +7,8 @@ PURPOSE:  Computes the spectral index using the specified input bands.
 index = (band1 - band2) / (band1 + band2)
 
 RETURN VALUE:
-Type = None
+Type = float
+Representing the spectral index
 
 PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
 at the USGS EROS
@@ -27,42 +28,36 @@ NOTES:
   3. If the current pixel is saturated in either band, then the output pixel
      value for the index will also be saturated.  The same applies for fill.
 ******************************************************************************/
-void make_index
+float make_index
 (
-    int16 *band1,         /* I: input array of scaled reflectance data for
-                                the spectral index */
-    int16 *band2,         /* I: input array of scaled reflectance data for
-                                the spectral index */
+    int16 band1,          /* I: input scaled reflectance value for the spectral
+                                index */
+    int16 band2,          /* I: input scaled reflectance value for the spectral
+                                index */
     int fill_value,       /* I: fill value for the reflectance values */
-    int satu_value,       /* I: saturation value for the reflectance values */
-    int nlines,           /* I: number of lines in the data arrays */
-    int nsamps,           /* I: number of samples in the data arrays */
-    float *spec_indx      /* O: output spectral index */
+    int satu_value        /* I: saturation value for the reflectance values */
 )
 {
-    int pix;                /* current pixel being processed */
     float ratio;            /* band ratio */
+    float spec_indx;        /* spectral index value */
 
-    /* Loop through the pixels in the array and compute the spectral index */
-    for (pix = 0; pix < nlines * nsamps; pix++)
+    /* If the current pixel is saturated in either band then the output
+       is saturated.  Ditto for fill. */
+    if (band1 == fill_value || band2 == fill_value)
+        spec_indx = (float) FILL_VALUE;
+    else
     {
-        /* If the current pixel is saturated in either band then the output
-           is saturated.  Ditto for fill. */
-        if (band1[pix] == fill_value || band2[pix] == fill_value)
-            spec_indx[pix] = (float) FILL_VALUE;
-        else
-        {
-            /* Compute the band ratio */
-            ratio = (float) (band1[pix] - band2[pix]) /
-                    (float) (band1[pix] + band2[pix]);
+        /* Compute the band ratio */
+        ratio = (float) (band1 - band2) / (float) (band1 + band2);
 
-            /* Keep the ratio between -1.0, 1.0 */
-            if (ratio > 1.0)
-                ratio = 1.0;
-            else if (ratio < -1.0)
-                ratio = -1.0;
-            spec_indx[pix] = ratio;
-        }
+        /* Keep the ratio between -1.0, 1.0 */
+        if (ratio > 1.0)
+            ratio = 1.0;
+        else if (ratio < -1.0)
+            ratio = -1.0;
+        spec_indx = ratio;
     }
-}
 
+    /* Return the value */
+    return spec_indx;
+}

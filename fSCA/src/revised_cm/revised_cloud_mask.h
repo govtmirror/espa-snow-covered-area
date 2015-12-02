@@ -33,17 +33,14 @@ short get_args
     bool *verbose         /* O: verbose flag */
 );
 
-void make_index
+float make_index
 (
-    int16 *band1,         /* I: input array of scaled reflectance data for
-                                the spectral index */
-    int16 *band2,         /* I: input array of scaled reflectance data for
-                                the spectral index */
+    int16 band1,          /* I: input scaled reflectance value for the spectral
+                                index */
+    int16 band2,          /* I: input scaled reflectance value for the spectral
+                                index */
     int fill_value,       /* I: fill value for the reflectance values */
-    int satu_value,       /* I: saturation value for the reflectance values */
-    int nlines,           /* I: number of lines in the data arrays */
-    int nsamps,           /* I: number of samples in the data arrays */
-    float *spec_indx      /* O: output spectral index */
+    int satu_value        /* I: saturation value for the reflectance values */
 );
 
 void variance
@@ -61,18 +58,8 @@ void rule_based_model
     Input_t *input_img,     /* I: pointer to input data structure containing
                                   the scaled reflectance and cloud mask
                                   buffers (reflectance bands are scaled) */
-    float *ndsi_arr,        /* I: NDSI scaled values */
-    float *ndvi_arr,        /* I: NDVI scaled values */
-    float *b1_var_arr,      /* I: band1 variance values */
-    float *b2_var_arr,      /* I: band2 variance values */
-    float *b4_var_arr,      /* I: band4 variance values */
-    float *b5_var_arr,      /* I: band5 variance values */
-    float *b7_var_arr,      /* I: band7 variance values */
-    float *ndvi_var_arr,    /* I: NDVI variance values */
-    float *ndsi_var_arr,    /* I: NDSI variance values */
     int nsamps,             /* I: number of samples in the input arrays */
-    uint8 *rev_cloud_mask,      /* O: revised cloud mask */
-    uint8 *rev_lim_cloud_mask   /* O: revised cloud mask without variances */
+    uint8 *rev_cloud_mask   /* O: revised cloud mask */
 );
 
 short buffer

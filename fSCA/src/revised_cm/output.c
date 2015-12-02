@@ -172,12 +172,12 @@ Output_t *open_output
         strcpy (bmeta[ib].data_units, data_units[ib]);
 
         /* Handle the cloud mask bands differently */
-        if (ib == REVISED_CM || ib == REVISED_LIM_CM)
+        if (ib == REVISED_CM)
         {
             bmeta[ib].data_type = ESPA_UINT8;
             bmeta[ib].fill_value = CFMASK_FILL_VALUE;
             bmeta[ib].valid_range[0] = 0;
-            bmeta[ib].valid_range[1] = 3;
+            bmeta[ib].valid_range[1] = 2;
 
             /* Set up class values information */
             if (allocate_class_metadata (&bmeta[ib], 3) != SUCCESS)
@@ -189,26 +189,11 @@ Output_t *open_output
           
             /* Identify the class values for the mask */
             bmeta[ib].class_values[0].class = 0;
-            bmeta[ib].class_values[2].class = 1;
-            bmeta[ib].class_values[3].class = 2;
+            bmeta[ib].class_values[1].class = 1;
+            bmeta[ib].class_values[2].class = 2;
             strcpy (bmeta[ib].class_values[0].description, "clear");
             strcpy (bmeta[ib].class_values[1].description, "cloud in cfmask");
             strcpy (bmeta[ib].class_values[2].description, "cloud");
-        }
-        else if (ib >= VARIANCE_B1 && ib <= VARIANCE_B7)
-        {
-            bmeta[ib].data_type = ESPA_FLOAT32;
-            bmeta[ib].fill_value = FILL_VALUE;
-        }
-        else if (ib == VARIANCE_NDVI || ib == VARIANCE_NDSI)
-        {
-            bmeta[ib].data_type = ESPA_FLOAT32;
-            bmeta[ib].fill_value = FILL_VALUE;
-        }
-        else if (ib == CM_NDVI || ib == CM_NDSI)
-        {
-            bmeta[ib].data_type = ESPA_FLOAT32;
-            bmeta[ib].fill_value = FILL_VALUE;
         }
 
         /* Set up the filename with the scene name and band name and open the
@@ -328,7 +313,6 @@ int free_output
     {
         /* Free the band data */
         free (this->metadata.band[REVISED_CM].class_values);
-        free (this->metadata.band[REVISED_LIM_CM].class_values);
         free (this->metadata.band);
 
         /* Free the data structure */
