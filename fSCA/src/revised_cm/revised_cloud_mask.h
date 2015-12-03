@@ -21,6 +21,7 @@
 #define OUT_POSS_CLOUD 1      /* pixel was cloud in input cfmask (possibly
                                  cloud) */
 #define OUT_CLOUD 2           /* pixel is cloud in revised cfmask (cloud) */
+#define OUT_WATER 3           /* pixel is water in DSWE */
 
 /* Prototypes */
 void usage ();

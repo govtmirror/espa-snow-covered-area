@@ -7,7 +7,8 @@ MODULE:  revised_cloud_mask
 PURPOSE:  Revised the cfmask cloud mask which is included as part of the ESPA
 surface reflectance product.  The cfmask flags many snow pixels as cloud pixels
 and this revision will clean up the cloud mask to correctly identify the snow
-pixels.
+pixels.  This routine also reads the DSWE PSCCSS band and flags water pixels
+in the output mask.
 
 RETURN VALUE:
 Type = int
@@ -33,6 +34,9 @@ Date          Programmer       Reason
                                better represent the clouds without it
 
 NOTES:
+  1. The DSWE PSCCSS band is used and water-high confidence (value of 1),
+     water-moderate confidence (value of 2), and partial surface water (value
+     of 3) pixels are marked as water pixels in the output mask.
 ******************************************************************************/
 int main (int argc, char *argv[])
 {
@@ -284,10 +288,11 @@ int main (int argc, char *argv[])
         printf ("  Buffering the revised cloud mask\n");
 #endif
 
-    /* Reopen the cfmask */
-    if (!reopen_cfmask (refl_input))
+    /* Reopen the cfmask and open DSWE.  Allocate memory for both buffers to
+       contain data for the entire image. */
+    if (!open_cfmask_dswe (refl_input))
     {
-        sprintf (errmsg, "Error reopening the cfmask");
+        sprintf (errmsg, "Error opening the cfmask and dswe bands");
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
     }
@@ -297,6 +302,15 @@ int main (int argc, char *argv[])
         SUCCESS)
     {
         sprintf (errmsg, "Error reading cfmask band");
+        error_handler (true, FUNC_NAME, errmsg);
+        exit (ERROR);
+    }
+
+    /* Read the DSWE for the entire image */
+    if (get_input_dswe_lines (refl_input, 0, refl_input->nlines, NULL) !=
+        SUCCESS)
+    {
+        sprintf (errmsg, "Error reading DSWE band");
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
     }
@@ -321,13 +335,24 @@ int main (int argc, char *argv[])
     }
 #endif
 
+    /* Print the processing status if verbose */
+    if (verbose)
+        printf ("  Marking cfmask and dswe in revised cloud mask\n");
+
     /* Loop through the pixels and mark the clear pixels that are flagged as
-       cloud in cfmask as possible cloud pixels */
+       cloud in cfmask as possible cloud pixels.  Mark the water pixels from
+       the DSWE band as water pixels. */
     for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
     {
+        /* Mark cfmask pixels */
         if (rev_cm[pix] == OUT_NOCLOUD &&
             refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
             rev_cm[pix] = OUT_POSS_CLOUD;
+
+        /* Mark cfmask pixels */
+        if (refl_input->dswe_buf[pix] > 0 &&
+            refl_input->dswe_buf[pix] <= 3)
+            rev_cm[pix] = OUT_WATER;
     }
 
     /* Write the revised buffered cloud mask */
@@ -338,6 +363,10 @@ int main (int argc, char *argv[])
         error_handler (true, FUNC_NAME, errmsg);
         exit (ERROR);
     }
+
+    /* Print the processing status if verbose */
+    if (verbose)
+        printf ("  Marking cfmask/dswe -- complete\n");
 
 #ifdef BUFFER
     /* Print the processing status if verbose */
@@ -351,10 +380,10 @@ int main (int argc, char *argv[])
     free (buff_cm);
 #endif
 
-    /* Close and free the cfmask pointers and buffers, then free the input
-       product */
-    close_cfmask (refl_input);
-    free_cfmask (refl_input);
+    /* Close and free the cfmask and dswe pointers and buffers, then free the
+       input product */
+    close_cfmask_dswe (refl_input);
+    free_cfmask_dswe (refl_input);
     free (refl_input);
 
     /* Write the ENVI header for the cloud mask */

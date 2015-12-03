@@ -33,6 +33,9 @@ typedef struct {
     uint8 *cfmask_buf;       /* input data buffer for cfmask data
                                 (PROC_NLINES lines of data) */
     FILE *fp_cfmask;         /* file pointer for cfmask file */
+    char *dswe_file_name;    /* name of the input dswe files */
+    uint8 *dswe_buf;         /* input data buffer for dswe data */
+    FILE *fp_dswe;           /* file pointer for dswe file */
     int16 refl_fill;         /* fill value for reflectance bands */
     float refl_scale_fact;   /* scale factor for reflectance bands */
     int refl_saturate_val;   /* saturation value for reflectance bands */
@@ -73,17 +76,25 @@ int get_input_cfmask_lines
     int16 *out_arr   /* O: output array to populate, if not NULL */
 );
 
-bool reopen_cfmask
+int get_input_dswe_lines
+(
+    Input_t *this,   /* I: pointer to input data structure */
+    int iline,       /* I: current line to read (0-based) */
+    int nlines,      /* I: number of lines to read */
+    int16 *out_arr   /* O: output array to populate, if not NULL */
+);
+
+bool open_cfmask_dswe
 (
     Input_t *input_struct   /* I: existing input structure */
 );
 
-void close_cfmask
+void close_cfmask_dswe
 (
     Input_t *this    /* I: pointer to input data structure */
 );
 
-void free_cfmask
+void free_cfmask_dswe
 (
     Input_t *this    /* I: pointer to input data structure */
 );

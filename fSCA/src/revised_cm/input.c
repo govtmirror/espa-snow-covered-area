@@ -24,6 +24,7 @@ Date         Programmer       Reason
                               from the spectral indices application)
 6/9/2015     Gail Schmidt     Updated the cfmask band name to 'cfmask' since
                               it had changed in ESPA a while ago
+12/3/2015    Gail Schmidt     Added DSWE files for input
 
 NOTES:
   1. This routine opens the input reflectance files.  It also allocates memory
@@ -31,6 +32,12 @@ NOTES:
      close_input and free_input to close the files and free up the memory when
      done using the input data structure.
   2. The read buffers are only set up to read NPROC_LINES at a time.
+  3. The DSWE file will not be opened and the buffer will not be allocated.
+     That happens in the open_cfmask_dswe routine.  The cfmask and dswe bands
+     are needed as a post-processing step in this algorithm.  The initial
+     processing needs the reflectance bands and cfmask, and they are processed
+     one line at a time.  The post-processing uses the entire band vs. just a
+     single line.
 ******************************************************************************/
 Input_t *open_input
 (
@@ -70,6 +77,9 @@ Input_t *open_input
     this->cfmask_file_name = NULL;
     this->fp_cfmask = NULL;
     this->cfmask_buf = NULL;
+    this->dswe_file_name = NULL;
+    this->fp_dswe = NULL;
+    this->dswe_buf = NULL;
 
     /* Initialize the input fields using information from the metadata
        structure */
@@ -124,6 +134,9 @@ Input_t *open_input
             else if (!strcmp (metadata->band[ib].name, "cfmask") &&
                 !strcmp (metadata->band[ib].product, "cfmask"))
                 this->cfmask_file_name = strdup (metadata->band[ib].file_name);
+            else if (!strcmp (metadata->band[ib].name, "dswe_psccss") &&
+                !strcmp (metadata->band[ib].product, "dswe_psccss"))
+                this->dswe_file_name = strdup (metadata->band[ib].file_name);
         }  /* for ib */
     }
     else
@@ -155,6 +168,9 @@ Input_t *open_input
             else if (!strcmp (metadata->band[ib].name, "cfmask") &&
                 !strcmp (metadata->band[ib].product, "cfmask"))
                 this->cfmask_file_name = strdup (metadata->band[ib].file_name);
+            else if (!strcmp (metadata->band[ib].name, "dswe_psccss") &&
+                !strcmp (metadata->band[ib].product, "dswe_psccss"))
+                this->dswe_file_name = strdup (metadata->band[ib].file_name);
         }  /* for ib */
     }
 
@@ -181,7 +197,7 @@ Input_t *open_input
     this->refl_scale_fact = metadata->band[refl_indx].scale_factor;
     this->refl_saturate_val = metadata->band[refl_indx].saturate_value;
 
-    /* Open each of the reflectance files then the cfmask file */
+    /* Open each of the reflectance files then the cfmask file (not the dswe) */
     for (ib = 0; ib < this->nrefl_band; ib++)
     {
         this->fp_bin[ib] = open_raw_binary (this->file_name[ib], "rb");
@@ -218,7 +234,8 @@ Input_t *open_input
     }
 
     /* Allocate input buffer.  Reflectance buffer has multiple bands.
-       Allocate PROC_NLINES of data for each band. */
+       Allocate PROC_NLINES of data for each band and cfmask, but not the
+       dswe. */
     buf = calloc (PROC_NLINES * this->nsamps * this->nrefl_band,
         sizeof (int16));
     if (buf == NULL)
@@ -380,7 +397,7 @@ int get_input_refl_lines
     int16 *out_arr   /* O: output array to populate, if not NULL */
 )
 {
-    char FUNC_NAME[] = "get_input_refl_line";   /* function name */
+    char FUNC_NAME[] = "get_input_refl_lines";   /* function name */
     char errmsg[STR_SIZE];    /* error message */
     long loc;                 /* current location in the input file */
     void *buf = NULL;         /* pointer to the buffer for the current band */
@@ -446,8 +463,6 @@ MODULE:  get_input_cfmask_lines
 PURPOSE:  Reads the cfmask data for the current lines, and populates the
 cfmask_buf buffer in the Input_t data structure.  If the output_arr is not
 NULL, read the data into the output_arr array instead of the refl_buf buffer.
-This allows the caller to read more data than the basic NPROC_LINES that has
-been allocated by default.
 
 RETURN VALUE:
 Type = int
@@ -467,7 +482,8 @@ Date         Programmer       Reason
 
 NOTES:
   1. The Input_t data structure needs to be populated and memory allocated
-     before calling this routine.  Use open_input to do that.
+     before calling this routine.  Use open_input and open_cfmask_dswe to do
+     that, depending on how much data needs to be allocated.
 ******************************************************************************/
 int get_input_cfmask_lines
 (
@@ -477,7 +493,7 @@ int get_input_cfmask_lines
     int16 *out_arr   /* O: output array to populate, if not NULL */
 )
 {
-    char FUNC_NAME[] = "get_input_cfmask_line";   /* function name */
+    char FUNC_NAME[] = "get_input_cfmask_lines";   /* function name */
     char errmsg[STR_SIZE];    /* error message */
     long loc;                 /* current location in the input file */
     void *buf = NULL;         /* pointer to the buffer for the current band */
@@ -532,16 +548,106 @@ int get_input_cfmask_lines
 
 
 /******************************************************************************
-MODULE:  reopen_cfmask
+MODULE:  get_input_dswe_lines
 
-PURPOSE:  Sets up the existing input data structure for cfmask, reopens the
-cfmask file for read access, and reallocates space for the whole cfmask band.
+PURPOSE:  Reads the dswe data for the current lines, and populates the
+dswe_buf buffer in the Input_t data structure.  If the output_arr is not
+NULL, read the data into the output_arr array instead of the refl_buf buffer.
+
+RETURN VALUE:
+Type = int
+Value      Description
+-----      -----------
+ERROR      Error occurred reading dswe data for this line
+SUCCESS    Successful completion
+
+PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
+at the USGS EROS
+
+HISTORY:
+Date         Programmer       Reason
+---------    ---------------  -------------------------------------
+12/3/2015    Gail Schmidt     Original Development
+
+NOTES:
+  1. The Input_t data structure needs to be populated and memory allocated
+     before calling this routine.  Use open_input and open_cfmask_dswe to do
+     that.
+******************************************************************************/
+int get_input_dswe_lines
+(
+    Input_t *this,   /* I: pointer to input data structure */
+    int iline,       /* I: current line to read (0-based) */
+    int nlines,      /* I: number of lines to read */
+    int16 *out_arr   /* O: output array to populate, if not NULL */
+)
+{
+    char FUNC_NAME[] = "get_input_dswe_lines";   /* function name */
+    char errmsg[STR_SIZE];    /* error message */
+    long loc;                 /* current location in the input file */
+    void *buf = NULL;         /* pointer to the buffer for the current band */
+  
+    /* Check the parameters */
+    if (this == NULL) 
+    {
+        strcpy (errmsg, "Input structure has not been opened/initialized");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+    if (!this->refl_open)
+    {
+        strcpy (errmsg, "Reflectance file has not been opened");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+    if (iline < 0 || iline >= this->nlines)
+    {
+        strcpy (errmsg, "Invalid line number for dswe band");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+  
+    /* If the output array is not NULL then use it, otherwise use the refl_buf
+       in the Input_t data structure */
+    if (out_arr == NULL)
+        buf = (void *) this->dswe_buf;
+    else
+        buf = (void *) out_arr;
+
+    /* Read the data, but first seek to the correct line */
+    loc = (long) iline * this->nsamps * sizeof (uint8);
+    if (fseek (this->fp_dswe, loc, SEEK_SET))
+    {
+        strcpy (errmsg, "Seeking to the current line in the input dswe file");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+
+    if (read_raw_binary (this->fp_dswe, nlines, this->nsamps, sizeof (uint8),
+        buf) != SUCCESS)
+    {
+        sprintf (errmsg, "Reading %d lines from dswe band starting at line %d",
+            nlines, iline);
+        error_handler (true, FUNC_NAME, errmsg);
+        return (ERROR);
+    }
+  
+    return (SUCCESS);
+}
+
+
+/******************************************************************************
+MODULE:  open_cfmask_dswe
+
+PURPOSE:  Sets up the existing input data structure for cfmask/dswe, opens the
+cfmask and dswe files for read access, and allocates space for the whole cfmask
+and dswe bands.
 
 RETURN VALUE:
 Type = Input_t*
 Value      Description
 -----      -----------
-false      Error occurred reopening or reallocting cfmask
+false      Error occurred opening or allocting cfmask/dswe
 true       Successful completion
 
 PROJECT:  Land Satellites Data System Science Research and Development (LSRD)
@@ -553,22 +659,24 @@ Date         Programmer       Reason
 12/2/2015    Gail Schmidt     Original Development
 
 NOTES:
-  1. This routine opens the input cfmask file.  It also allocates memory for
-     the cfmask buffer in the input structure.  It is up to the caller to use
-     close_cfmask and free_cfmask to close the file and free up the memory when
-     done using the input data structure.
+  1. This routine opens the input cfmask/dswe files.  It also allocates memory
+     for the cfmask/dswe buffers in the input structure.  It is up to the caller
+     to use close_cfmask_dswe and free_cfmask_dswe to close the files and free
+     up the memory when done using the input data structure.
 ******************************************************************************/
-bool reopen_cfmask
+bool open_cfmask_dswe
 (
     Input_t *input_struct   /* I: existing input structure */
 )
 {
-    char FUNC_NAME[] = "reopen_cfmask";   /* function name */
+    char FUNC_NAME[] = "open_cfmask_dswe";   /* function name */
     char errmsg[STR_SIZE];    /* error message */
 
     /* Initialize the input pointers */
     input_struct->fp_cfmask = NULL;
     input_struct->cfmask_buf = NULL;
+    input_struct->fp_dswe = NULL;
+    input_struct->dswe_buf = NULL;
 
     /* Open the cfmask file */
     input_struct->fp_cfmask = open_raw_binary (input_struct->cfmask_file_name,
@@ -587,10 +695,34 @@ bool reopen_cfmask
         input_struct->nlines * input_struct->nsamps, sizeof (uint8));
     if (input_struct->cfmask_buf == NULL)
     {
-        close_cfmask (input_struct);
-        free_cfmask (input_struct);
-        sprintf (errmsg, "Allocating memory for input cfmask buffer "
-            "containing %d lines.", input_struct->nlines);
+        close_cfmask_dswe (input_struct);
+        free_cfmask_dswe (input_struct);
+        sprintf (errmsg, "Allocating memory for input cfmask buffer continaing "
+            "%d lines.", input_struct->nlines);
+        error_handler (true, FUNC_NAME, errmsg);
+        return (false);
+    }
+
+    /* Open the dswe file */
+    input_struct->fp_dswe = open_raw_binary (input_struct->dswe_file_name,
+        "rb");
+    if (input_struct->fp_dswe == NULL)
+    {
+        sprintf (errmsg, "Opening raw binary file: %s",
+            input_struct->dswe_file_name);
+        error_handler (true, FUNC_NAME, errmsg);
+        return (false);
+    }
+
+    /* Allocate input buffer for the entire image */
+    input_struct->dswe_buf = calloc (
+        input_struct->nlines * input_struct->nsamps, sizeof (uint8));
+    if (input_struct->dswe_buf == NULL)
+    {
+        close_cfmask_dswe (input_struct);
+        free_cfmask_dswe (input_struct);
+        sprintf (errmsg, "Allocating memory for input dswe buffer containing "
+            "%d lines.", input_struct->nlines);
         error_handler (true, FUNC_NAME, errmsg);
         return (false);
     }
@@ -601,9 +733,9 @@ bool reopen_cfmask
 
 
 /******************************************************************************
-MODULE:  close_cfmask
+MODULE:  close_cfmask_dswe
 
-PURPOSE:  Ends SDS access and closes the cfmask file.
+PURPOSE:  Ends SDS access and closes the cfmask and dswe files.
 
 RETURN VALUE:
 Type = None
@@ -618,24 +750,25 @@ Date         Programmer       Reason
 
 NOTES:
 ******************************************************************************/
-void close_cfmask
+void close_cfmask_dswe
 (
     Input_t *this    /* I: pointer to input data structure */
 )
 {
-    /* Close the cfmask file */
+    /* Close the cfmask and dswe files */
     if (this->refl_open)
     {
         close_raw_binary (this->fp_cfmask);
+        close_raw_binary (this->fp_dswe);
         this->refl_open = false;
     }
 }
 
 
 /******************************************************************************
-MODULE:  free_cfmask
+MODULE:  free_cfmask_dswe
 
-PURPOSE:  Frees memory in the input data structure for cfmask.
+PURPOSE:  Frees memory in the input data structure for cfmask and dswe.
 
 RETURN VALUE:
 Type = None
@@ -650,29 +783,31 @@ Date         Programmer       Reason
 
 NOTES:
 ******************************************************************************/
-void free_cfmask
+void free_cfmask_dswe
 (
     Input_t *this    /* I: pointer to input data structure */
 )
 {
-    char FUNC_NAME[] = "free_cfmask";  /* function name */
-    char errmsg[STR_SIZE];             /* error message */
+    char FUNC_NAME[] = "free_cfmask_dswe";  /* function name */
+    char errmsg[STR_SIZE];                  /* error message */
 
     if (this != NULL)
     {
         if (this->refl_open) 
         {
             strcpy (errmsg, "Freeing input data structure, but reflectance "
-                "file is still open. Use close_input or close_cfmask to close "
-                "the file");
+                "file is still open. Use close_input or close_cfmask_dswe to "
+                "close the file");
             error_handler (false, FUNC_NAME, errmsg);
         }
   
-        /* Free filename pointer */
+        /* Free filename pointers */
         free (this->cfmask_file_name);
+        free (this->dswe_file_name);
   
-        /* Free the data buffer */
+        /* Free the data buffers */
         free (this->cfmask_buf);
+        free (this->dswe_buf);
     } /* end if */
 }
 
