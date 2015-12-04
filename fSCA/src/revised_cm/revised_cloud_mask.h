@@ -16,6 +16,7 @@
 #include "error_handler.h"
 
 /* Defines for cloud mask and revised cloud mask */
+#define CFMASK_FILL 255       /* fill value in input cfmask */
 #define CFMASK_CLOUD 4        /* cloud value in input cfmask */
 #define OUT_NOCLOUD 0         /* pixel is not cloud (clear) */
 #define OUT_POSS_CLOUD 1      /* pixel was cloud in input cfmask (possibly

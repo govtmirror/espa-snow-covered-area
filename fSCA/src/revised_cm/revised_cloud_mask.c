@@ -32,6 +32,8 @@ Date          Programmer       Reason
 12/2/2015     Gail Schmidt     Commented out the buffer around the
                                erosion/dilation results because it seems to
                                better represent the clouds without it
+12/4/2015     Gail Schmidt     Erosion/dilation fills in fill pixels.  Remask
+                               all fill pixels as fill.
 
 NOTES:
   1. The DSWE PSCCSS band is used and water-high confidence (value of 1),
@@ -344,6 +346,11 @@ int main (int argc, char *argv[])
        the DSWE band as water pixels. */
     for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
     {
+        /* Make sure fill pixels stay as fill pixels and the erosion/dilation
+           doesn't overwrite fill pixels */
+        if (refl_input->cfmask_buf[pix] == CFMASK_FILL)
+            rev_cm[pix] = 0;
+
         /* Mark cfmask pixels */
         if (rev_cm[pix] == OUT_NOCLOUD &&
             refl_input->cfmask_buf[pix] == CFMASK_CLOUD)

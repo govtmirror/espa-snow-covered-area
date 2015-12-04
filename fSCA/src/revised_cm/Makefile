@@ -5,7 +5,7 @@
 # Set up compile options
 CC = gcc
 RM = rm -f
-EXTRA = -Wall -g
+EXTRA = -Wall
 
 # Define the include files
 INC = input.h output.h revised_cloud_mask.h
