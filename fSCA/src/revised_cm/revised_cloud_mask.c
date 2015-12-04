@@ -271,10 +271,6 @@ int main (int argc, char *argv[])
                 opencv_img[line*cv_img->widthStep + samp];
         }
     }
-//FILE *my_fp;
-//my_fp = fopen ("gail2.img", "w");
-//fwrite (rev_cm, refl_input->nlines*refl_input->nsamps, sizeof(uint8), my_fp);
-//fclose (my_fp);
 
     /* Print the processing status if verbose */
     if (verbose)
