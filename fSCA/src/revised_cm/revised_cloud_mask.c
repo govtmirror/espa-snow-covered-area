@@ -413,7 +413,7 @@ int main (int argc, char *argv[])
         }
     }
   
-    /* Append the spectral index bands to the XML file */
+    /* Append the revised cloud mask band to the XML file */
     if (append_metadata (cm_output->nband, cm_output->metadata.band,
         xml_infile) != SUCCESS)
     {

@@ -25,6 +25,7 @@ Date         Programmer       Reason
 6/9/2015     Gail Schmidt     Updated the cfmask band name to 'cfmask' since
                               it had changed in ESPA a while ago
 12/3/2015    Gail Schmidt     Added DSWE files for input
+12/8/2015    Gail Schmidt     Add support for Landsat 8
 
 NOTES:
   1. This routine opens the input reflectance files.  It also allocates memory
@@ -48,9 +49,15 @@ Input_t *open_input
 {
     char FUNC_NAME[] = "open_input";   /* function name */
     char errmsg[STR_SIZE];    /* error message */
+    char band_name[STR_SIZE]; /* base of the band name (sr_band or toa_band) */
+    char tmp_band[STR_SIZE];  /* temporary band name for current band */
+    char product_name[STR_SIZE];  /* product name (sr_refl or toa_refl) */
+    bool band_found;          /* was the reflectance band found in the XML? */
+
     Input_t *this = NULL;     /* input data structure to be initialized,
                                  populated, and returned to the caller */
     int ib;                   /* loop counter for bands */
+    int meta_ib;              /* loop counter for metadata bands */
     int refl_indx = -1;       /* band index in XML file for the reflectance
                                  band */
     int16 *buf = NULL;        /* temporary buffer to allocate memory for
@@ -94,84 +101,49 @@ Input_t *open_input
         this->refl_band[4] = 5;
         this->refl_band[5] = 7;
     }
+    else if (!strcmp (gmeta->instrument, "OLI_TIRS") ||
+             !strcmp (gmeta->instrument, "OLI"))
+    {
+        this->nrefl_band = 6;     /* number of reflectance bands */
+        this->refl_band[0] = 2;
+        this->refl_band[1] = 3;
+        this->refl_band[2] = 4;
+        this->refl_band[3] = 5;
+        this->refl_band[4] = 6;
+        this->refl_band[5] = 7;
+    }
     else
     {
         free_input (this);
         sprintf (errmsg, "Unsupported instrument type.  Currently only "
-            "TM and ETM+ are supported");
+            "TM, ETM+, and OLI are supported");
         error_handler (true, FUNC_NAME, errmsg);
         return (NULL);
     }
 
-    /* If processing TOA bands, then grab the toa_refl product bands.
-       Otherwise grab the surface reflectance bands. */
+    /* Determine which product we are processing - TOA or SR */
     if (toa)
     {
-        for (ib = 0; ib < metadata->nbands; ib++)
-        {
-            if (!strcmp (metadata->band[ib].name, "toa_band1") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-            {
-                /* this is the index we'll use for reflectance band info */
-                refl_indx = ib;
-                this->file_name[0] = strdup (metadata->band[ib].file_name);
-            }
-            else if (!strcmp (metadata->band[ib].name, "toa_band2") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-                this->file_name[1] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "toa_band3") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-                this->file_name[2] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "toa_band4") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-                this->file_name[3] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "toa_band5") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-                this->file_name[4] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "toa_band7") &&
-                !strcmp (metadata->band[ib].product, "toa_refl"))
-                this->file_name[5] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "cfmask") &&
-                !strcmp (metadata->band[ib].product, "cfmask"))
-                this->cfmask_file_name = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "dswe_psccss") &&
-                !strcmp (metadata->band[ib].product, "dswe_psccss"))
-                this->dswe_file_name = strdup (metadata->band[ib].file_name);
-        }  /* for ib */
+        strcpy (product_name, "toa_refl");
+        strcpy (band_name, "toa_band");
     }
     else
     {
-        for (ib = 0; ib < metadata->nbands; ib++)
+        strcpy (product_name, "sr_refl");
+        strcpy (band_name, "sr_band");
+    }
+
+    /* Get the reference band, which will be the first band in our reflectance
+       band list */
+    for (meta_ib = 0; meta_ib < metadata->nbands; meta_ib++)
+    {
+        sprintf (tmp_band, "%s%d", band_name, this->refl_band[0]);
+        if (!strcmp (metadata->band[meta_ib].name, tmp_band) &&
+            !strcmp (metadata->band[meta_ib].product, product_name))
         {
-            if (!strcmp (metadata->band[ib].name, "sr_band1") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-            {
-                /* this is the index we'll use for reflectance band info */
-                refl_indx = ib;
-                this->file_name[0] = strdup (metadata->band[ib].file_name);
-            }
-            else if (!strcmp (metadata->band[ib].name, "sr_band2") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-                this->file_name[1] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "sr_band3") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-                this->file_name[2] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "sr_band4") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-                this->file_name[3] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "sr_band5") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-                this->file_name[4] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "sr_band7") &&
-                !strcmp (metadata->band[ib].product, "sr_refl"))
-                this->file_name[5] = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "cfmask") &&
-                !strcmp (metadata->band[ib].product, "cfmask"))
-                this->cfmask_file_name = strdup (metadata->band[ib].file_name);
-            else if (!strcmp (metadata->band[ib].name, "dswe_psccss") &&
-                !strcmp (metadata->band[ib].product, "dswe_psccss"))
-                this->dswe_file_name = strdup (metadata->band[ib].file_name);
-        }  /* for ib */
+            /* this is the index we'll use for reflectance band info */
+            refl_indx = meta_ib;
+        }
     }
 
     /* Make sure we found the bands */
@@ -186,6 +158,46 @@ Input_t *open_input
                 "the XML file.");
         error_handler (true, FUNC_NAME, errmsg);
         return (NULL);
+    }
+
+    /* Loop through the reflectance bands and setup the filenames for each */
+    for (ib = 0; ib < this->nrefl_band; ib++)
+    {
+        /* Identify the band name we are looking for */
+        sprintf (tmp_band, "%s%d", band_name, this->refl_band[ib]);
+
+        /* Loop through the metadata bands and find the desired band */
+        band_found = false;
+        for (meta_ib = 0; meta_ib < metadata->nbands; meta_ib++)
+        {
+            if (!strcmp (metadata->band[meta_ib].name, tmp_band) &&
+                !strcmp (metadata->band[meta_ib].product, product_name))
+            {
+                this->file_name[ib] =
+                    strdup (metadata->band[meta_ib].file_name);
+                band_found = true;
+                break;
+            }
+        }
+
+        /* Make sure the band was found in the XML */
+        if (!band_found)
+        {
+            sprintf (errmsg, "Unable to find band %s in XML file.", tmp_band);
+            error_handler (true, FUNC_NAME, errmsg);
+            return (NULL);
+        }
+    }
+
+    /* Loop through the metadata bands and find the cfmask and dswe bands */
+    for (meta_ib = 0; meta_ib < metadata->nbands; meta_ib++)
+    {
+        if (!strcmp (metadata->band[meta_ib].name, "cfmask") &&
+            !strcmp (metadata->band[meta_ib].product, "cfmask"))
+            this->cfmask_file_name = strdup (metadata->band[meta_ib].file_name);
+        else if (!strcmp (metadata->band[meta_ib].name, "dswe_psccss") &&
+            !strcmp (metadata->band[meta_ib].product, "dswe_psccss"))
+            this->dswe_file_name = strdup (metadata->band[meta_ib].file_name);
     }
 
     /* Pull the reflectance info from representative band1 in the XML file */
@@ -203,10 +215,10 @@ Input_t *open_input
         this->fp_bin[ib] = open_raw_binary (this->file_name[ib], "rb");
         if (this->fp_bin[ib] == NULL)
         {
-            free_input (this);
             sprintf (errmsg, "Opening raw binary file: %s",
                 this->file_name[ib]);
             error_handler (true, FUNC_NAME, errmsg);
+            free_input (this);
             return (NULL);
         }
     }
@@ -214,9 +226,9 @@ Input_t *open_input
     this->fp_cfmask = open_raw_binary (this->cfmask_file_name, "rb");
     if (this->fp_cfmask == NULL)
     {
-        free_input (this);
         sprintf (errmsg, "Opening raw binary file: %s", this->cfmask_file_name);
         error_handler (true, FUNC_NAME, errmsg);
+        free_input (this);
         return (NULL);
     }
     this->refl_open = true;
