@@ -39,6 +39,8 @@ NOTES:
      processing needs the reflectance bands and cfmask, and they are processed
      one line at a time.  The post-processing uses the entire band vs. just a
      single line.
+  4. DSWE data doesn't exist yet for Landsat 8, so need to allow it to not
+     be available.
 ******************************************************************************/
 Input_t *open_input
 (
@@ -198,6 +200,15 @@ Input_t *open_input
         else if (!strcmp (metadata->band[meta_ib].name, "dswe_psccss") &&
             !strcmp (metadata->band[meta_ib].product, "dswe_psccss"))
             this->dswe_file_name = strdup (metadata->band[meta_ib].file_name);
+    }
+
+    /* If processing TM/ETM+ and the DSWE band is missing, then it's an error */
+    if (!this->dswe_file_name && (!strcmp (gmeta->instrument, "TM") ||
+        !strncmp (gmeta->instrument, "ETM", 3)))
+    {
+        sprintf (errmsg, "Unable to find DSWE band in XML file.");
+        error_handler (true, FUNC_NAME, errmsg);
+        return (NULL);
     }
 
     /* Pull the reflectance info from representative band1 in the XML file */
@@ -695,7 +706,7 @@ bool open_cfmask_dswe
         "rb");
     if (input_struct->fp_cfmask == NULL)
     {
-        sprintf (errmsg, "Opening raw binary file: %s",
+        sprintf (errmsg, "Opening cfmask file: %s",
             input_struct->cfmask_file_name);
         error_handler (true, FUNC_NAME, errmsg);
         return (false);
@@ -715,28 +726,31 @@ bool open_cfmask_dswe
         return (false);
     }
 
-    /* Open the dswe file */
-    input_struct->fp_dswe = open_raw_binary (input_struct->dswe_file_name,
-        "rb");
-    if (input_struct->fp_dswe == NULL)
+    /* Open the dswe file, if it's available */
+    if (input_struct->dswe_file_name)
     {
-        sprintf (errmsg, "Opening raw binary file: %s",
-            input_struct->dswe_file_name);
-        error_handler (true, FUNC_NAME, errmsg);
-        return (false);
-    }
+        input_struct->fp_dswe = open_raw_binary (input_struct->dswe_file_name,
+            "rb");
+        if (input_struct->fp_dswe == NULL)
+        {
+            sprintf (errmsg, "Opening DSWE file: %s",
+                input_struct->dswe_file_name);
+            error_handler (true, FUNC_NAME, errmsg);
+            return (false);
+        }
 
-    /* Allocate input buffer for the entire image */
-    input_struct->dswe_buf = calloc (
-        input_struct->nlines * input_struct->nsamps, sizeof (uint8));
-    if (input_struct->dswe_buf == NULL)
-    {
-        close_cfmask_dswe (input_struct);
-        free_cfmask_dswe (input_struct);
-        sprintf (errmsg, "Allocating memory for input dswe buffer containing "
-            "%d lines.", input_struct->nlines);
-        error_handler (true, FUNC_NAME, errmsg);
-        return (false);
+        /* Allocate input buffer for the entire image */
+        input_struct->dswe_buf = calloc (
+            input_struct->nlines * input_struct->nsamps, sizeof (uint8));
+        if (input_struct->dswe_buf == NULL)
+        {
+            close_cfmask_dswe (input_struct);
+            free_cfmask_dswe (input_struct);
+            sprintf (errmsg, "Allocating memory for input dswe buffer "
+                "containing %d lines.", input_struct->nlines);
+            error_handler (true, FUNC_NAME, errmsg);
+            return (false);
+        }
     }
 
     /* Success */

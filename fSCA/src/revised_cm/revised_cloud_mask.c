@@ -304,13 +304,16 @@ int main (int argc, char *argv[])
         exit (ERROR);
     }
 
-    /* Read the DSWE for the entire image */
-    if (get_input_dswe_lines (refl_input, 0, refl_input->nlines, NULL) !=
-        SUCCESS)
+    /* Read the DSWE for the entire image, if it's available */
+    if (refl_input->dswe_file_name)
     {
-        sprintf (errmsg, "Error reading DSWE band");
-        error_handler (true, FUNC_NAME, errmsg);
-        exit (ERROR);
+        if (get_input_dswe_lines (refl_input, 0, refl_input->nlines, NULL) !=
+            SUCCESS)
+        {
+            sprintf (errmsg, "Error reading DSWE band");
+            error_handler (true, FUNC_NAME, errmsg);
+            exit (ERROR);
+        }
     }
 
 #ifdef BUFFER
@@ -338,8 +341,7 @@ int main (int argc, char *argv[])
         printf ("  Marking cfmask and dswe in revised cloud mask\n");
 
     /* Loop through the pixels and mark the clear pixels that are flagged as
-       cloud in cfmask as possible cloud pixels.  Mark the water pixels from
-       the DSWE band as water pixels. */
+       cloud in cfmask as possible cloud pixels */
     for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
     {
         /* Make sure fill pixels stay as fill pixels and the erosion/dilation
@@ -351,11 +353,19 @@ int main (int argc, char *argv[])
         if (rev_cm[pix] == OUT_NOCLOUD &&
             refl_input->cfmask_buf[pix] == CFMASK_CLOUD)
             rev_cm[pix] = OUT_POSS_CLOUD;
+    }
 
-        /* Mark cfmask pixels */
-        if (refl_input->dswe_buf[pix] > 0 &&
-            refl_input->dswe_buf[pix] <= 3)
-            rev_cm[pix] = OUT_WATER;
+    /* Loop through the pixels and mark the water pixels from the DSWE band as
+       water pixels, if hte DSWE band is available */
+    if (refl_input->dswe_file_name)
+    {
+        for (pix = 0; pix < refl_input->nlines * refl_input->nsamps; pix++)
+        {
+            /* Mark cfmask pixels */
+            if (refl_input->dswe_buf[pix] > 0 &&
+                refl_input->dswe_buf[pix] <= 3)
+                rev_cm[pix] = OUT_WATER;
+        }
     }
 
     /* Write the revised buffered cloud mask */
