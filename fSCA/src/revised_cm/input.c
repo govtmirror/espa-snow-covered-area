@@ -785,7 +785,8 @@ void close_cfmask_dswe
     if (this->refl_open)
     {
         close_raw_binary (this->fp_cfmask);
-        close_raw_binary (this->fp_dswe);
+        if (this->dswe_file_name)
+            close_raw_binary (this->fp_dswe);
         this->refl_open = false;
     }
 }
