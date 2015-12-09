@@ -26,6 +26,7 @@
 
 /* Prototypes */
 void usage ();
+void version ();
 
 short get_args
 (

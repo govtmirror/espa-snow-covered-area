@@ -22,6 +22,7 @@ HISTORY:
 Date          Programmer       Reason
 ----------    ---------------  -------------------------------------
 5/19/2014     Gail Schmidt     Original Development
+12/9/2015     Gail Schmidt     Supported the --version command-line argument
 
 NOTES:
   1. Memory is allocated for the input file.  This should be character a
@@ -46,6 +47,7 @@ short get_args
         {"verbose", no_argument, &verbose_flag, 1},
         {"xml", required_argument, 0, 'i'},
         {"help", no_argument, 0, 'h'},
+        {"version", no_argument, 0, 'v'},
         {0, 0, 0, 0}
     };
 
@@ -73,8 +75,11 @@ short get_args
      
             case 'h':  /* help */
                 usage ();
-                return (ERROR);
-                break;
+                exit (SUCCESS);
+
+            case 'v':  /* version */
+                version ();
+                exit (SUCCESS);
 
             case 'i':  /* input file */
                 *xml_infile = strdup (optarg);

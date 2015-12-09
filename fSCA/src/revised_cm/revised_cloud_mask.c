@@ -460,16 +460,17 @@ HISTORY:
 Date         Programmer       Reason
 ---------    ---------------  -------------------------------------
 5/20/2014    Gail Schmidt     Original Development
+12/9/2015    Gail Schmidt     Updated to support --version cmd line arg
 
 NOTES:
 ******************************************************************************/
 void usage ()
 {
-    printf ("revised_cloud_mask revises the cfmask cloud mask in the input "
+    printf ("revised_cloud_mask %s revises the cfmask cloud mask in the input "
             "surface reflectance product, using the TOA reflectance bands. The "
             "cfmask flags many snow pixels as cloud pixels and this revision "
             "will clean up the cloud mask to correctly identify the snow "
-            "pixels.\n\n");
+            "pixels.\n\n", CLOUD_MASK_VERSION);
     printf ("usage: revised_cloud_mask "
             "--xml=input_xml_filename [--verbose]\n");
 
@@ -479,8 +480,33 @@ void usage ()
     printf ("\nwhere the following parameters are optional:\n");
     printf ("    -verbose: should intermediate messages be printed? (default "
             "is false)\n");
-    printf ("\nrevised_cloud_mask --help will print the usage statement\n");
     printf ("\nExample: revised_cloud_mask "
-            "--xml=LT50400331995173AAA02.xml --verbose\n");
+            "--xml=LT50400331995173AAA02.xml --verbose\n\n");
+
+    printf ("revised_cloud_mask --version prints the version information for "
+        "this application\n");
+    printf ("revised_cloud_mask --help will print the usage information for "
+        "this application\n");
+}
+
+
+/******************************************************************************
+MODULE:  version
+
+PURPOSE:  Prints the version information for this application.
+
+RETURN VALUE:
+Type = None
+
+HISTORY:
+Date        Programmer       Reason
+---------   ---------------  -------------------------------------
+12/9/2015   Gail Schmidt     Original Development
+
+NOTES:
+******************************************************************************/
+void version ()
+{
+    printf ("revised_cloud_mask version %s\n", CLOUD_MASK_VERSION);
 }
 
